@@ -142,8 +142,7 @@
 
   function isFinanceSectionVisible(role, financeVisible) {
     if (!role) return false;
-    if (role === 'owner') return true; // Owner always sees finance
-    if (role === 'general_manager') {
+    if (role === 'owner' || role === 'general_manager') {
       return Boolean(financeVisible);
     }
     return false;
@@ -288,7 +287,13 @@
         promoCodes: []
       },
       bostaSizes: getBostaSizes(),
-      products: [],
+      products: [
+        {
+          id: 'prod_default',
+          title: 'برم يومي',
+          approxWeightKg: 2.4
+        }
+      ],
       cms: {
         footerText: 'جميع الحقوق محفوظة © 2026 أولاد القاضي',
         footerEmail: 'hello@awladelkady.com',

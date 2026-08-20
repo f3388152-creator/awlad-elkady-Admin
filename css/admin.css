@@ -346,30 +346,64 @@ button {
   gap: 1rem;
 }
 
-.security-request-item {
-  border: 1px solid var(--border);
-  background: #fafcfb;
-  border-radius: 16px;
-  padding: 1rem;
+.security-request-table {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
 }
 
-.security-request-item-header {
-  display: flex;
-  justify-content: space-between;
+.security-request-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.1fr) minmax(120px, 0.8fr) minmax(160px, 1.3fr) auto;
   gap: 1rem;
-  margin-bottom: 0.75rem;
+  align-items: center;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--border);
+  background: #fbfcfd;
+  border-radius: 16px;
+}
+
+.security-request-row-head {
+  background: linear-gradient(135deg, rgba(32, 54, 77, 0.06), rgba(122, 166, 122, 0.08));
+  font-weight: 700;
+  color: var(--secondary);
+}
+
+.security-request-name {
+  font-weight: 700;
+  color: var(--secondary);
 }
 
 .security-request-meta {
   color: var(--text-muted);
-  font-size: 0.8rem;
+  font-size: 0.9rem;
 }
 
 .security-request-actions {
   display: flex;
   gap: 0.6rem;
   justify-content: flex-end;
-  margin-top: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.security-request-empty {
+  padding: 1rem;
+  border: 1px dashed var(--border);
+  border-radius: 16px;
+  background: var(--bg-main);
+  color: var(--text-muted);
+}
+
+@media (max-width: 768px) {
+  .security-request-row,
+  .security-request-row-head {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+
+  .security-request-actions {
+    justify-content: flex-start;
+  }
 }
 
 @media (max-width: 991px) {
@@ -758,6 +792,8 @@ img, svg {
   border: 1px solid var(--border);
   box-shadow: var(--shadow-sm);
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .admin-card.full-width {
@@ -1245,7 +1281,7 @@ input:checked + .toggle-track:before {
 .permissions-box {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.85rem;
 }
 
 .permission-item {
@@ -1263,6 +1299,23 @@ input:checked + .toggle-track:before {
 .permission-item.enabled {
   border-color: rgba(16, 185, 129, 0.35);
   background: rgba(16, 185, 129, 0.08);
+}
+
+.permission-item.owner-locked {
+  border-color: rgba(32, 178, 109, 0.35);
+  background: linear-gradient(135deg, rgba(32, 178, 109, 0.14), rgba(32, 178, 109, 0.08));
+  opacity: 1;
+  cursor: not-allowed;
+}
+
+.permission-item.owner-locked .permission-pill {
+  background: rgba(32, 178, 109, 0.15);
+  color: var(--success);
+}
+
+.permission-item.owner-locked span:first-child {
+  color: var(--success);
+  font-weight: 700;
 }
 
 .permission-pill {

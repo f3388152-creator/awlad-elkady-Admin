@@ -214,19 +214,44 @@ function logoutUser() {
 }
 
 async function verifyLocalCredential(type, value) {
-  if (!authLogic || typeof authLogic.verifyManagerPassword !== 'function') {
-    return false;
+  const normalizedValue = String(value || '').trim();
+  if (!normalizedValue) return false;
+
+  if (type === 'owner') {
+    return typeof authLogic.verifyOwnerPin === 'function' ? await authLogic.verifyOwnerPin(normalizedValue) : false;
   }
 
-  if (type === 'manager') {
-    return await authLogic.verifyManagerPassword(value);
+  const accounts = Array.isArray(db.employees) ? db.employees : [];
+  const candidates = type === 'manager'
+    ? accounts.filter((employee) => employee.role === 'general_manager')
+    : accounts.filter((employee) => ['employee', 'customer_service', 'data_entry'].includes(employee.role));
+
+  for (const account of candidates) {
+    if (type === 'manager') {
+      if (account.password && String(account.password).trim() === normalizedValue) return true;
+      if (account.passwordHash && typeof authLogic.hashText === 'function') {
+        const hashed = await authLogic.hashText(normalizedValue);
+        if (hashed === account.passwordHash) return true;
+      }
+    }
+
+    if (type === 'employee') {
+      if (account.phone && String(account.phone).trim() === normalizedValue) return true;
+      if (account.phoneHash && typeof authLogic.hashText === 'function') {
+        const hashed = await authLogic.hashText(normalizedValue);
+        if (hashed === account.phoneHash) return true;
+      }
+    }
   }
-  if (type === 'employee') {
-    return await authLogic.verifyEmployeePhone(value);
+
+  if (type === 'manager' && typeof authLogic.verifyManagerPassword === 'function') {
+    return await authLogic.verifyManagerPassword(normalizedValue);
   }
-  if (type === 'owner') {
-    return await authLogic.verifyOwnerPin(value);
+
+  if (type === 'employee' && typeof authLogic.verifyEmployeePhone === 'function') {
+    return await authLogic.verifyEmployeePhone(normalizedValue);
   }
+
   return false;
 }
 
@@ -239,7 +264,7 @@ async function performLogin(role, value) {
 
   const session = {
     role,
-    userName: role === 'manager' ? 'مدير النظام' : role === 'employee' ? 'موظف' : 'المالك',
+    userName: role === 'manager' ? 'مدير عام' : role === 'employee' ? 'موظف' : 'المالك',
     lastLoginAt: new Date().toISOString()
   };
 
@@ -277,28 +302,36 @@ function renderSecurityRequests() {
 
   const requests = readSecurityRequests();
   if (!isOwnerSession()) {
-    list.innerHTML = '<div class="security-request-item">لا توجد صلاحية لعرض هذه الطلبات.</div>';
+    list.innerHTML = '<div class="security-request-empty">لا توجد صلاحية لعرض هذه الطلبات.</div>';
     return;
   }
 
   if (!requests.length) {
-    list.innerHTML = '<div class="security-request-item">لا توجد طلبات أمان حاليًا.</div>';
+    list.innerHTML = '<div class="security-request-empty">لا توجد طلبات أمان حاليًا.</div>';
     return;
   }
 
-  list.innerHTML = requests.map((request) => `
-    <div class="security-request-item">
-      <div class="security-request-item-header">
-        <strong>${request.role === 'manager' ? 'مدير' : 'موظف'}</strong>
-        <span class="security-request-meta">${request.type === 'password' ? 'تغيير كلمة السر' : 'تغيير رقم الموبايل'}</span>
+  list.innerHTML = `
+    <div class="security-request-table">
+      <div class="security-request-row security-request-row-head">
+        <div>الاسم</div>
+        <div>نوع الطلب</div>
+        <div>السبب</div>
+        <div>الإجراء</div>
       </div>
-      <div class="security-request-meta">السبب: ${request.reason || 'غير مذكور'}</div>
-      <div class="security-request-actions">
-        <button type="button" class="btn-ghost" data-request-action="approve" data-request-id="${request.id}">موافقة</button>
-        <button type="button" class="btn-primary-admin" data-request-action="reject" data-request-id="${request.id}">رفض</button>
-      </div>
+      ${requests.map((request) => `
+        <div class="security-request-row">
+          <div class="security-request-name">${request.requesterName || request.user || request.name || (request.role === 'manager' ? 'مدير عام' : 'موظف')}</div>
+          <div class="security-request-meta">${request.type === 'password' ? 'تغيير كلمة السر' : 'تغيير رقم الموبايل'}</div>
+          <div class="security-request-meta">${request.reason || 'غير مذكور'}</div>
+          <div class="security-request-actions">
+            <button type="button" class="btn-ghost" data-request-action="approve" data-request-id="${request.id}">موافقة</button>
+            <button type="button" class="btn-primary-admin" data-request-action="reject" data-request-id="${request.id}">رفض</button>
+          </div>
+        </div>
+      `).join('')}
     </div>
-  `).join('');
+  `;
 }
 
 function handleSecurityRequestAction(event) {
@@ -327,8 +360,14 @@ function handleSecurityRequestAction(event) {
 
 async function submitSecurityRequest() {
   const type = document.getElementById('securityRequestType').value;
+  const requesterName = document.getElementById('securityRequestName')?.value.trim();
   const reason = document.getElementById('securityRequestReason').value.trim();
   const session = readSession();
+
+  if (!requesterName) {
+    showToast('يجب إدخال اسم الموظف أو المدير', 'error');
+    return;
+  }
 
   if (!reason) {
     showToast('يجب إدخال سبب الطلب', 'error');
@@ -339,6 +378,7 @@ async function submitSecurityRequest() {
   requests.unshift({
     id: `req_${Date.now()}`,
     type,
+    requesterName,
     reason,
     role: session && session.role ? session.role : 'employee',
     createdAt: new Date().toISOString()
@@ -347,6 +387,8 @@ async function submitSecurityRequest() {
   storeSecurityRequests(requests);
   closeModal(securityRequestModal);
   document.getElementById('securityRequestReason').value = '';
+  const requesterNameInput = document.getElementById('securityRequestName');
+  if (requesterNameInput) requesterNameInput.value = '';
   renderSecurityRequests();
   showToast('تم إرسال طلب تغيير بيانات الدخول إلى المالك', 'success');
 }
@@ -747,12 +789,14 @@ const ROLE_LABELS = {
 };
 
 function canRole(permission, role = db.roles.currentRole) {
+  if (role === 'owner') return true;
   const permissions = db.roles.permissions?.[role] || [];
   return permissions.includes(permission);
 }
 
 function renderPermissions() {
   const list = document.getElementById('permissionsList');
+  if (!list) return;
   const role = document.getElementById('adminCurrentRole').value;
   let permissions = db.roles.permissions?.[role] || [];
 
@@ -769,14 +813,14 @@ function renderPermissions() {
     ['manage_customers', 'إدارة العملاء']
   ];
 
-  if (role === 'owner') {
-    permissions = normalizedPermissions.map(p => p[0]);
-  }
+  const isOwner = role === 'owner';
+  const ownerPermissions = normalizedPermissions.map((permission) => permission[0]);
+  const effectivePermissions = isOwner ? ownerPermissions : permissions;
 
   list.innerHTML = normalizedPermissions.map(([key, label]) => `
-    <div class="permission-item ${permissions.includes(key) ? 'enabled' : ''}" ${role === 'owner' ? 'style="opacity: 0.8; cursor: not-allowed;"' : ''}>
+    <div class="permission-item ${effectivePermissions.includes(key) ? 'enabled' : ''} ${isOwner ? 'owner-locked' : ''}">
       <span>${label}</span>
-      <span class="permission-pill" ${role === 'owner' ? 'style="background-color: var(--success); color: white;"' : ''}>${permissions.includes(key) ? 'مسموح' : 'ممنوع'}</span>
+      <span class="permission-pill">${effectivePermissions.includes(key) ? 'مسموح' : 'ممنوع'}</span>
     </div>
   `).join('');
 }
@@ -835,7 +879,9 @@ function renderPermissionMatrix() {
     { key: 'updateBostaKeys', label: 'تعديل مفاتيح بوسطة' }
   ];
 
-  const employee = db.employees?.[0] || { permissions: {} };
+  const employeeName = document.getElementById('employeeNameInput')?.value.trim();
+  const employeeRole = document.getElementById('employeeRoleInput')?.value || 'customer_service';
+  const employee = (db.employees || []).find((item) => item.name === employeeName && item.role === employeeRole) || { permissions: {} };
   const permissions = employee.permissions || {};
 
   const rowsHtml = rows.map((row) => `
