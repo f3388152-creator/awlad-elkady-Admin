@@ -471,6 +471,45 @@ function initializeAuthHandlers() {
   }
 }
 
+window.renderSecurityRequests = function() {
+  const list = document.getElementById('securityRequestsList');
+  if (!list) return;
+  const requests = readSecurityRequests();
+  
+  if (requests.length === 0) {
+    list.innerHTML = `<div style="text-align:center; padding: 2rem; color: #888;">لا توجد طلبات أمان معلقة حالياً.</div>`;
+    return;
+  }
+  
+  list.innerHTML = requests.map((req, i) => `
+    <div class="admin-card" style="padding: 1rem; border: 1px solid #ddd; background: #fafafa; display: flex; justify-content: space-between; align-items: center;">
+      <div>
+        <h4 style="margin:0 0 0.25rem 0;">نوع الطلب: ${req.type === 'password' ? 'تغيير كلمة السر' : 'تغيير رقم الموبايل'}</h4>
+        <p style="margin:0; font-size: 0.9rem; color:#555;">السبب: <strong>${req.reason || 'لم يتم ذكر سبب'}</strong> — الموظف: ${req.user || 'غير محدد'}</p>
+      </div>
+      <div style="display:flex; gap:0.5rem;">
+        <button class="btn-primary-admin" data-index="${i}" data-action="approve" style="background-color:var(--success);">موافقة</button>
+        <button class="btn-primary-admin" data-index="${i}" data-action="reject" style="background-color:#E74C3C;">رفض</button>
+      </div>
+    </div>
+  `).join('');
+};
+
+window.handleSecurityRequestAction = function(event) {
+  const button = event.target.closest('button[data-action]');
+  if (!button) return;
+  const action = button.dataset.action;
+  const index = Number(button.dataset.index);
+  
+  let requests = readSecurityRequests();
+  if (requests[index]) {
+    requests.splice(index, 1);
+    storeSecurityRequests(requests);
+    renderSecurityRequests();
+    showToast(`تم ${action === 'approve' ? 'الموافقة على' : 'رفض'} الطلب وتمت إزالته من القائمة.`);
+  }
+};
+
 const session = readSession();
 if (session) {
   hideAuthAndShowApp();
@@ -715,7 +754,7 @@ function canRole(permission, role = db.roles.currentRole) {
 function renderPermissions() {
   const list = document.getElementById('permissionsList');
   const role = document.getElementById('adminCurrentRole').value;
-  const permissions = db.roles.permissions?.[role] || [];
+  let permissions = db.roles.permissions?.[role] || [];
 
   const normalizedPermissions = [
     ['manage_roles', 'إضافة مدير عام وتحديد الصلاحيات'],
@@ -730,10 +769,14 @@ function renderPermissions() {
     ['manage_customers', 'إدارة العملاء']
   ];
 
+  if (role === 'owner') {
+    permissions = normalizedPermissions.map(p => p[0]);
+  }
+
   list.innerHTML = normalizedPermissions.map(([key, label]) => `
-    <div class="permission-item ${permissions.includes(key) ? 'enabled' : ''}">
+    <div class="permission-item ${permissions.includes(key) ? 'enabled' : ''}" ${role === 'owner' ? 'style="opacity: 0.8; cursor: not-allowed;"' : ''}>
       <span>${label}</span>
-      <span class="permission-pill">${permissions.includes(key) ? 'مسموح' : 'ممنوع'}</span>
+      <span class="permission-pill" ${role === 'owner' ? 'style="background-color: var(--success); color: white;"' : ''}>${permissions.includes(key) ? 'مسموح' : 'ممنوع'}</span>
     </div>
   `).join('');
 }
@@ -841,14 +884,40 @@ document.getElementById('financeVisibilityToggle').addEventListener('change', (e
   document.getElementById('financeVisibilityStatus').value = event.target.checked ? 'ظاهر' : 'مخفي';
 });
 
-document.getElementById('btnAddManager').addEventListener('click', () => {
-  const name = document.getElementById('newManagerName').value.trim();
-  if (!name) return showToast('يرجى كتابة اسم المدير العام', 'error');
+const btnAddAccount = document.getElementById('btnAddAccount');
+if (btnAddAccount) {
+  btnAddAccount.addEventListener('click', () => {
+    const name = document.getElementById('newAccountName').value.trim();
+    const role = document.getElementById('newAccountRole').value;
+    const password = document.getElementById('newManagerPassword').value.trim();
+    const phone = document.getElementById('newEmployeePhone').value.trim();
 
-  db.roles.managers.push({ id: 'manager_' + Date.now(), name, role: 'general_manager' });
-  document.getElementById('newManagerName').value = '';
-  showToast('تمت إضافة مدير عام جديد');
-});
+    if (!name) return showToast('يرجى كتابة اسم الحساب', 'error');
+
+    if (role === 'general_manager' && (!password || password.length < 4)) {
+      return showToast('يرجى إدخال كلمة سر صالحة للمدير (4 حروف أو أرقام على الأقل)', 'error');
+    }
+    
+    if (role === 'employee' && (!phone || phone.length < 10)) {
+      return showToast('يرجى إدخال رقم موبايل صحيح للموظف', 'error');
+    }
+
+    db.employees = db.employees || [];
+    db.employees.push({
+      id: 'acc_' + Date.now(),
+      name,
+      role,
+      password: role === 'general_manager' ? password : null,
+      phone: role === 'employee' ? phone : null,
+      permissions: {}
+    });
+
+    document.getElementById('newAccountName').value = '';
+    document.getElementById('newManagerPassword').value = '';
+    document.getElementById('newEmployeePhone').value = '';
+    showToast('تمت إضافة الحساب بنجاح');
+  });
+}
 
 document.getElementById('btnAddPromoCode').addEventListener('click', () => {
   const code = prompt('اكتب كود الخصم (مثل: SALE10):');
@@ -893,12 +962,19 @@ document.getElementById('btnAddEmployeePermission').addEventListener('click', ()
   permissions.updateBostaKeys = Boolean(document.querySelector('input[data-extra="updateBostaKeys"]')?.checked);
 
   db.employees = db.employees || [];
-  db.employees.push({
-    id: 'emp_' + Date.now(),
-    name: employeeName,
-    role: document.getElementById('employeeRoleInput').value,
-    permissions
-  });
+  
+  const existingIndex = db.employees.findIndex(emp => emp.name === employeeName);
+  if (existingIndex > -1) {
+    db.employees[existingIndex].role = document.getElementById('employeeRoleInput').value;
+    db.employees[existingIndex].permissions = permissions;
+  } else {
+    db.employees.push({
+      id: 'emp_' + Date.now(),
+      name: employeeName,
+      role: document.getElementById('employeeRoleInput').value,
+      permissions
+    });
+  }
 
   renderPermissionMatrix();
   document.getElementById('employeeNameInput').value = '';

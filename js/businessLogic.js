@@ -123,6 +123,7 @@
 
   function canEmployeeAccess(employee, section, action) {
     if (!employee) return false;
+    if (employee.role === 'owner') return true;
     const permissions = normalizeEmployeePermissions(employee.permissions || {});
     if (section === 'quickDiscount') return Boolean(permissions.quickDiscount);
     if (section === 'updateBostaKeys') return Boolean(permissions.updateBostaKeys);
@@ -133,6 +134,7 @@
 
   function can(role, permission) {
     const normalizedRole = (role || '').toString();
+    if (normalizedRole === 'owner') return true;
     const roleConfig = ROLE_DEFINITIONS[normalizedRole];
     if (!roleConfig) return false;
     return roleConfig.permissions.includes(permission);
@@ -140,7 +142,8 @@
 
   function isFinanceSectionVisible(role, financeVisible) {
     if (!role) return false;
-    if (role === 'owner' || role === 'general_manager') {
+    if (role === 'owner') return true; // Owner always sees finance
+    if (role === 'general_manager') {
       return Boolean(financeVisible);
     }
     return false;

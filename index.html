@@ -259,13 +259,14 @@
               <h3 class="card-title">صورة Hero الرئيسية</h3>
             </div>
             <div class="card-body">
-              <div class="upload-area" id="heroImgDropzone">
+              <div class="upload-area" id="heroImgDropzone" style="padding-bottom:1.5rem;">
                 <div class="upload-icon">
                   <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
                 </div>
-                <p class="upload-text">اسحب الصورة هنا أو <span class="upload-link">اختر ملف</span></p>
-                <p class="upload-hint">PNG, JPG, WEBP — الحجم الموصى به: 1200×600px</p>
-                <input type="file" accept="image/*" class="upload-input" id="heroImgInput">
+                <p class="upload-text">اسحب الصورة هنا أو</p>
+                <label for="heroImgInput" class="btn-primary-admin" style="display:inline-block; margin-top:0.5rem; padding:0.4rem 1.2rem; cursor:pointer; font-weight:500;">اختر صورة 📸</label>
+                <p class="upload-hint" style="margin-top:0.75rem;">PNG, JPG, WEBP — الحجم الموصى به: 1200×600px</p>
+                <input type="file" accept="image/*" class="upload-input" id="heroImgInput" style="display:none;">
               </div>
               <div class="img-preview" id="heroImgPreview">
                 <img src="../assets/hero-bg.png" alt="Preview" id="heroImgPreviewImg" onerror="this.parentElement.style.display='none'">
@@ -445,18 +446,29 @@
 
           <div class="admin-card half-width">
             <div class="card-head">
-              <h3 class="card-title">إدارة المديرين</h3>
+              <h3 class="card-title">إضافة حسابات (Auth)</h3>
             </div>
             <div class="card-body">
               <div class="form-group">
-                <label class="form-label">اسم مدير عام جديد</label>
-                <input type="text" class="form-control" id="newManagerName" placeholder="مثال: محمد">
+                <label class="form-label">الاسم</label>
+                <input type="text" class="form-control" id="newAccountName" placeholder="مثال: محمد">
               </div>
               <div class="form-group">
                 <label class="form-label">الدور</label>
-                <input type="text" class="form-control" value="مدير عام" disabled>
+                <select class="form-control" id="newAccountRole" onchange="document.getElementById('managerPasswordField').classList.toggle('hidden', this.value !== 'general_manager'); document.getElementById('employeePhoneField').classList.toggle('hidden', this.value !== 'employee');">
+                   <option value="general_manager">مدير عام</option>
+                   <option value="employee">موظف (خدمة عملاء/مدخل بيانات)</option>
+                </select>
               </div>
-              <button class="btn-primary-admin" id="btnAddManager">إضافة مدير عام</button>
+              <div class="form-group" id="managerPasswordField">
+                <label class="form-label">كلمة السر (إجباري)</label>
+                <input type="password" class="form-control" id="newManagerPassword" placeholder="••••••••">
+              </div>
+              <div class="form-group hidden" id="employeePhoneField">
+                <label class="form-label">رقم الموبايل (إجباري)</label>
+                <input type="tel" class="form-control" id="newEmployeePhone" placeholder="010XXXXXXXX" dir="ltr">
+              </div>
+              <button class="btn-primary-admin" id="btnAddAccount" style="width:100%; margin-top:0.5rem;">حفظ الحساب المتكامل</button>
             </div>
           </div>
 
@@ -510,20 +522,20 @@
             </div>
           </div>
 
-          <div class="admin-card full-width">
+          <div class="admin-card full-width" style="margin-top:1rem;">
             <div class="card-head">
-              <h3 class="card-title">جدول الصلاحيات التفصيلي للموظفين</h3>
+              <h3 class="card-title">تعديل الصلاحيات المخصصة للموظفين والمديرين</h3>
             </div>
             <div class="card-body">
-              <div class="employee-permissions-wrap">
+              <div class="employee-permissions-wrap" style="padding:1.5rem; background:#f8f9fa; border-radius:8px; border:1px solid #e1e4e8;">
                 <div class="employee-permission-form">
-                  <div class="form-row">
+                  <div class="form-row" style="margin-bottom:1.5rem;">
                     <div class="form-group">
-                      <label class="form-label">اسم الموظف</label>
-                      <input type="text" class="form-control" id="employeeNameInput" placeholder="مثال: سارة">
+                      <label class="form-label">البحث باسم الموظف أو المدير لتعديل صلاحياته</label>
+                      <input type="text" class="form-control" id="employeeNameInput" placeholder="أدخل اسم الشخص المُضاف مسبقاً...">
                     </div>
                     <div class="form-group">
-                      <label class="form-label">الدور</label>
+                      <label class="form-label">النطاق الوظيفي الأساسي</label>
                       <select class="form-control" id="employeeRoleInput">
                         <option value="customer_service">خدمة عملاء</option>
                         <option value="data_entry">مدخل بيانات</option>
@@ -531,9 +543,9 @@
                       </select>
                     </div>
                   </div>
-                  <div class="permission-matrix" id="permissionMatrix"></div>
-                  <div class="form-actions compact">
-                    <button class="btn-primary-admin" id="btnAddEmployeePermission">حفظ صلاحيات الموظف</button>
+                  <div class="permission-matrix" id="permissionMatrix" style="margin-bottom:1.5rem;"></div>
+                  <div class="form-actions compact" style="margin-top:1rem; text-align:left;">
+                    <button class="btn-primary-admin" id="btnAddEmployeePermission" style="padding:0.75rem 2rem;">تحديث الصلاحيات</button>
                   </div>
                 </div>
               </div>
@@ -611,6 +623,29 @@
                 <input type="hidden" id="cmsReviewRating" value="5">
               </div>
               <button class="btn-primary-admin" id="btnAddCmsReview">حفظ الرأي</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =========================================================
+         SECTION 6: SECURITY REQUESTS
+         ========================================================= -->
+      <section class="admin-section" id="section-security">
+        <div class="section-head">
+          <h2 class="section-title">طلبات الأمان وتغيير البيانات</h2>
+          <p class="section-desc">مخصصة للمالك فقط لإدارة طلبات تغيير كلمة السر أو رقم موبايل الموظفين.</p>
+        </div>
+
+        <div class="card-grid">
+          <div class="admin-card full-width">
+            <div class="card-head">
+              <h3 class="card-title">قائمة الطلبات المعلقة</h3>
+            </div>
+            <div class="card-body" style="padding:1.5rem;">
+              <div id="securityRequestsList" class="security-requests-list" style="display:flex; flex-direction:column; gap:1rem;">
+                 <!-- Requests generated by JS -->
+              </div>
             </div>
           </div>
         </div>
