@@ -546,6 +546,11 @@ function setupImageUpload(inputId, dropzoneId, previewDivId, previewImgId) {
       reader.onload = function(e) {
         if(previewImgId === 'heroImgPreviewImg') db.hero.img = e.target.result;
         if(previewImgId === 'productImgPreviewImg') document.getElementById('productImgData').value = e.target.result;
+        if(previewImgId === 'adminLogoPreviewImg') {
+          db.platform.logo = e.target.result;
+          const logoDataInput = document.getElementById('adminLogoData');
+          if (logoDataInput) logoDataInput.value = e.target.result;
+        }
         
         previewImg.src = e.target.result;
         previewDiv.style.display = 'block';
@@ -559,13 +564,38 @@ function setupImageUpload(inputId, dropzoneId, previewDivId, previewImgId) {
 // Setup Uploads
 setupImageUpload('heroImgInput', 'heroImgDropzone', 'heroImgPreview', 'heroImgPreviewImg');
 setupImageUpload('productImgInput', 'productImgDropzone', 'productImgPreview', 'productImgPreviewImg');
+setupImageUpload('adminLogoInput', 'adminLogoDropzone', 'adminLogoPreview', 'adminLogoPreviewImg');
 
 // Remove Images
-document.getElementById('heroImgRemove').addEventListener('click', () => {
+document.getElementById('heroImgRemove').addEventListener('click', (e) => {
+  e.preventDefault();
   document.getElementById('heroImgPreview').style.display = 'none';
   document.getElementById('heroImgDropzone').style.display = 'block';
   db.hero.img = '';
 });
+
+const adminLogoRemove = document.getElementById('adminLogoRemove');
+if (adminLogoRemove) {
+  adminLogoRemove.addEventListener('click', (e) => {
+    e.preventDefault();
+    document.getElementById('adminLogoPreview').style.display = 'none';
+    document.getElementById('adminLogoDropzone').style.display = 'block';
+    const logoDataInput = document.getElementById('adminLogoData');
+    if (logoDataInput) logoDataInput.value = '';
+    if (db.platform) db.platform.logo = '';
+  });
+}
+
+const productImgRemove = document.getElementById('productImgRemove');
+if (productImgRemove) {
+  productImgRemove.addEventListener('click', (e) => {
+    e.preventDefault();
+    document.getElementById('productImgPreview').style.display = 'none';
+    document.getElementById('productImgDropzone').style.display = 'block';
+    const productDataInput = document.getElementById('productImgData');
+    if (productDataInput) productDataInput.value = '';
+  });
+}
 
 // ==========================================
 // 3. LOAD DATA INTO UI
