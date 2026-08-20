@@ -1,0 +1,979 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>لوحة الإدارة — أولاد القاضي</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&family=Tajawal:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+
+  <div id="authScreen" class="auth-screen">
+    <div class="auth-shell">
+      <div class="auth-logo-trigger">
+        <img src="../assets/logo.jpg" alt="أولاد القاضي" onerror="this.style.display='none'">
+      </div>
+
+      <div class="auth-card">
+        <div class="auth-header">
+          <span class="auth-kicker">لوحة الإدارة</span>
+          <h1>تسجيل الدخول</h1>
+        </div>
+
+        <div class="auth-mode-switch" aria-label="نوع الدخول">
+          <button type="button" class="auth-mode-btn active" data-auth-role="manager">مدير</button>
+          <button type="button" class="auth-mode-btn" data-auth-role="employee">موظف</button>
+        </div>
+
+        <form id="loginForm" class="auth-form">
+          <div class="auth-field" data-auth-field="manager">
+            <label for="authPassword">كلمة السر</label>
+            <input type="password" id="authPassword" placeholder="أدخل كلمة السر" autocomplete="current-password">
+          </div>
+
+          <div class="auth-field hidden" data-auth-field="employee">
+            <label for="authPhone">رقم الموبايل</label>
+            <input type="tel" id="authPhone" dir="ltr" placeholder="01012345678" autocomplete="username">
+          </div>
+
+          <button type="submit" class="auth-submit-btn">دخول</button>
+          <button type="button" class="auth-request-link" id="requestCredentialsBtn">طلب تغيير بيانات الدخول</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div id="welcomeScreen" class="welcome-screen hidden" aria-live="polite">
+    <div class="welcome-card glass-panel">
+      <div class="welcome-badge">لوحة أولاد القاضي</div>
+      <h2 id="welcomeUserName">أهلاً بك</h2>
+      <p>جارٍ تجهيز مساحة العمل...</p>
+    </div>
+  </div>
+
+  <div id="securityRequestModal" class="auth-modal hidden">
+    <div class="auth-modal-card">
+      <div class="auth-modal-header">
+        <h3>طلب تغيير بيانات الدخول</h3>
+        <button type="button" class="modal-close-btn" data-close-modal="securityRequestModal">×</button>
+      </div>
+      <div class="auth-modal-body">
+        <label class="form-label">نوع الطلب</label>
+        <select id="securityRequestType" class="form-control">
+          <option value="password">تغيير كلمة السر</option>
+          <option value="phone">تغيير رقم الموبايل</option>
+        </select>
+
+        <label class="form-label">سبب الطلب</label>
+        <textarea id="securityRequestReason" class="form-control" rows="4" placeholder="اكتب السبب بالتفصيل..."></textarea>
+      </div>
+      <div class="auth-modal-footer">
+        <button type="button" class="btn-ghost" data-close-modal="securityRequestModal">إلغاء</button>
+        <button type="button" class="btn-primary-admin" id="submitSecurityRequest">إرسال الطلب</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="ownerPinModal" class="auth-modal hidden">
+    <div class="auth-modal-card">
+      <div class="auth-modal-header">
+        <h3>بوابة المالك السري</h3>
+        <button type="button" class="modal-close-btn" data-close-modal="ownerPinModal">×</button>
+      </div>
+      <div class="auth-modal-body">
+        <label class="form-label">PIN Code</label>
+        <input type="password" id="ownerPinInput" class="form-control" maxlength="6" dir="ltr" placeholder="••••••">
+      </div>
+      <div class="auth-modal-footer">
+        <button type="button" class="btn-ghost" data-close-modal="ownerPinModal">إلغاء</button>
+        <button type="button" class="btn-primary-admin" id="submitOwnerPin">دخول خاص</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="appShell" class="app-shell hidden">
+  <!-- ============================================================
+     SIDEBAR
+     ============================================================ -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <div class="sidebar-logo">
+        <img src="../assets/logo.jpg" alt="أولاد القاضي" onerror="this.style.display='none'">
+        <div class="sidebar-brand-text">
+          <span class="sidebar-brand-name">أولاد القاضي</span>
+          <span class="sidebar-brand-sub">لوحة الإدارة</span>
+        </div>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="#" class="nav-item active" data-section="hero">
+        <span class="nav-icon">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18"/></svg>
+        </span>
+        <span>الواجهة الرئيسية</span>
+      </a>
+      <a href="#" class="nav-item" data-section="announcement">
+        <span class="nav-icon">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        </span>
+        <span>شريط الإعلانات</span>
+      </a>
+      <a href="#" class="nav-item" data-section="roles">
+        <span class="nav-icon">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="10" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        </span>
+        <span>الصلاحيات والخصومات</span>
+      </a>
+      <a href="#" class="nav-item" data-section="cms">
+        <span class="nav-icon">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v15H6.5A2.5 2.5 0 0 1 4 14.5v-10A2.5 2.5 0 0 1 6.5 2z"/></svg>
+        </span>
+        <span>إدارة المحتوى</span>
+      </a>
+      <a href="#" class="nav-item" data-section="products">
+        <span class="nav-icon">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+        </span>
+        <span>المنتجات والأقسام</span>
+      </a>
+      <a href="#" class="nav-item" data-section="contact">
+        <span class="nav-icon">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.41 2 2 0 0 1 3.6 1.22h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.8a16 16 0 0 0 6.29 6.29l.95-.94a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+        </span>
+        <span>بيانات التواصل</span>
+      </a>
+      <a href="#" class="nav-item" data-section="reviews">
+        <span class="nav-icon">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        </span>
+        <span>آراء العملاء</span>
+      </a>
+      <a href="#" class="nav-item" data-section="security">
+        <span class="nav-icon">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        </span>
+        <span>طلبات الأمان</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <button type="button" class="logout-btn" id="btnLogout">تسجيل خروج</button>
+      <a href="../index.html" target="_blank" class="view-site-btn">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        معاينة الموقع
+      </a>
+    </div>
+  </aside>
+
+  <!-- ============================================================
+     MAIN CONTENT
+     ============================================================ -->
+  <div class="main-wrapper">
+
+    <!-- Top Bar -->
+    <header class="topbar">
+      <div class="topbar-brand">
+        <button class="sidebar-toggle" id="sidebarToggle" aria-label="فتح القائمة">
+          <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <div class="topbar-title" id="topbarTitle">الواجهة الرئيسية</div>
+      </div>
+      <div class="topbar-actions">
+        <button class="btn-back" id="btnBackSection" type="button">رجوع</button>
+        <button class="btn-save-all" id="btnSaveAll">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+          <span>حفظ التغييرات</span>
+        </button>
+      </div>
+    </header>
+
+    <div class="owner-settings-banner" id="ownerSettingsBanner">
+      <span>وضع المالك: تحكم مطلق على اللوحة والإعدادات</span>
+    </div>
+
+    <main class="content-area">
+
+      <!-- =========================================================
+         SECTION 1: HERO
+         ========================================================= -->
+      <section class="admin-section active" id="section-hero">
+        <div class="section-head">
+          <h2 class="section-title">الواجهة الرئيسية (Hero Section)</h2>
+          <p class="section-desc">هذا القسم يتحكم في العنوان والنص وصورة الخلفية اللي تظهر أول ما يفتح الزائر الموقع.</p>
+        </div>
+
+        <div class="card-grid">
+          <!-- Main Title -->
+          <div class="admin-card full-width">
+            <div class="card-head">
+              <h3 class="card-title">العناوين الرئيسية</h3>
+            </div>
+            <div class="card-body">
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">السطر التمهيدي <span class="label-hint">(أعلى الاسم)</span></label>
+                  <input type="text" class="form-control" id="heroPrefixText" placeholder="مثال: أهلاً بكم في" value="أهلاً بكم في">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">الاسم الرئيسي للمعرض</label>
+                  <input type="text" class="form-control" id="heroMainTitle" placeholder="اسم المعرض" value="معرض أولاد القاضي">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">السطر الأسفل <span class="label-hint">(تحت الاسم)</span></label>
+                  <input type="text" class="form-control" id="heroSuffixText" placeholder="مثال: للأدوات المنزلية والمطبخ العصري" value="للأدوات المنزلية والمطبخ العصري">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">نص الوصف (Subtitle)</label>
+                  <textarea class="form-control" id="heroSubtext" rows="3" placeholder="النص الوصفي تحت العنوان...">تشكيلة مختارة بعناية من أجهزة المطبخ الفاخرة وأطقم الطهي العصرية. جودة حقيقية، ضمان موثوق، وتوصيل سريع لباب بيتك.</textarea>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- CTA Buttons -->
+          <div class="admin-card half-width">
+            <div class="card-head">
+              <h3 class="card-title">أزرار الدعوة (CTA)</h3>
+            </div>
+            <div class="card-body">
+              <div class="form-group">
+                <label class="form-label">نص الزرار الأساسي</label>
+                <input type="text" class="form-control" id="heroCta1Text" placeholder="مثال: تصفح المنتجات" value="تصفح المنتجات">
+              </div>
+              <div class="form-group">
+                <label class="form-label">نص الزرار الثانوي</label>
+                <input type="text" class="form-control" id="heroCta2Text" placeholder="مثال: تواصل مباشر" value="تواصل مباشر">
+              </div>
+            </div>
+          </div>
+
+          <!-- Hero Image Upload -->
+          <div class="admin-card half-width">
+            <div class="card-head">
+              <h3 class="card-title">صورة Hero الرئيسية</h3>
+            </div>
+            <div class="card-body">
+              <div class="upload-area" id="heroImgDropzone">
+                <div class="upload-icon">
+                  <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+                </div>
+                <p class="upload-text">اسحب الصورة هنا أو <span class="upload-link">اختر ملف</span></p>
+                <p class="upload-hint">PNG, JPG, WEBP — الحجم الموصى به: 1200×600px</p>
+                <input type="file" accept="image/*" class="upload-input" id="heroImgInput">
+              </div>
+              <div class="img-preview" id="heroImgPreview">
+                <img src="../assets/hero-bg.png" alt="Preview" id="heroImgPreviewImg" onerror="this.parentElement.style.display='none'">
+                <button class="img-remove-btn" id="heroImgRemove" title="حذف الصورة">×</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Trust Badges -->
+          <div class="admin-card full-width">
+            <div class="card-head">
+              <h3 class="card-title">شارات الثقة (Trust Badges)</h3>
+              <span class="card-badge">3 شارات</span>
+            </div>
+            <div class="card-body">
+              <div class="badges-grid" id="trustBadgesContainer">
+                <div class="trust-badge-item">
+                  <label class="form-label">الشارة الأولى</label>
+                  <div class="form-row-sm">
+                    <input type="text" class="form-control" placeholder="الأيقونة (إيموجي)" value="🚚" maxlength="4" style="max-width:70px; text-align:center;">
+                    <input type="text" class="form-control" placeholder="السطر الأول" value="شحن سريع">
+                    <input type="text" class="form-control" placeholder="السطر الثاني" value="لجميع المحافظات">
+                  </div>
+                </div>
+                <div class="trust-badge-item">
+                  <label class="form-label">الشارة الثانية</label>
+                  <div class="form-row-sm">
+                    <input type="text" class="form-control" placeholder="الأيقونة (إيموجي)" value="🛡️" maxlength="4" style="max-width:70px; text-align:center;">
+                    <input type="text" class="form-control" placeholder="السطر الأول" value="ضمان حقيقي">
+                    <input type="text" class="form-control" placeholder="السطر الثاني" value="وجودة معتمدة">
+                  </div>
+                </div>
+                <div class="trust-badge-item">
+                  <label class="form-label">الشارة الثالثة</label>
+                  <div class="form-row-sm">
+                    <input type="text" class="form-control" placeholder="الأيقونة (إيموجي)" value="💵" maxlength="4" style="max-width:70px; text-align:center;">
+                    <input type="text" class="form-control" placeholder="السطر الأول" value="الدفع عند">
+                    <input type="text" class="form-control" placeholder="السطر الثاني" value="الاستلام">
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =========================================================
+         SECTION 2: ANNOUNCEMENT BAR
+         ========================================================= -->
+      <section class="admin-section" id="section-announcement">
+        <div class="section-head">
+          <h2 class="section-title">شريط الإعلانات</h2>
+          <p class="section-desc">شريط يظهر في أعلى الصفحة بنص إعلاني مميز. يمكن تفعيله أو إيقافه في أي وقت.</p>
+        </div>
+
+        <div class="card-grid">
+          <div class="admin-card full-width">
+            <div class="card-head">
+              <h3 class="card-title">إعدادات الشريط</h3>
+              <!-- Toggle -->
+              <div class="toggle-wrapper">
+                <span class="toggle-label">الشريط</span>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="announcementToggle" checked>
+                  <span class="toggle-track"></span>
+                </label>
+                <span class="toggle-status" id="announcementStatus">مفعّل</span>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="form-group">
+                <label class="form-label">نص الإعلان</label>
+                <input type="text" class="form-control form-control-lg" id="announcementText" placeholder="مثال: 🎉 شحن مجاني لجميع الطلبات اليوم فقط!" value="🎉 عروض خاصة على أطقم الجرانيت هذا الأسبوع — تسوّق الآن!">
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">لون الخلفية</label>
+                  <div class="color-picker-group">
+                    <input type="color" class="color-input" id="announcementBgColor" value="#2C3E50">
+                    <input type="text" class="form-control" id="announcementBgHex" value="#2C3E50" placeholder="#2C3E50" maxlength="7">
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">لون النص</label>
+                  <div class="color-picker-group">
+                    <input type="color" class="color-input" id="announcementTextColor" value="#FFFFFF">
+                    <input type="text" class="form-control" id="announcementTextHex" value="#FFFFFF" placeholder="#FFFFFF" maxlength="7">
+                  </div>
+                </div>
+              </div>
+              <!-- Live Preview -->
+              <div class="preview-label">معاينة مباشرة:</div>
+              <div class="announcement-preview" id="announcementPreview">
+                🎉 عروض خاصة على أطقم الجرانيت هذا الأسبوع — تسوّق الآن!
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =========================================================
+         SECTION 1: OWNER WHITE LABEL + SIDEBAR
+         ========================================================= -->
+      <section class="admin-section active" id="section-white-label">
+        <div class="section-head">
+          <h2 class="section-title">إعدادات النظام العليا</h2>
+          <p class="section-desc">تحكم المالك في branding، اسم اللوحة، شريط التنقل الداخلي، وإخفاء أو إظهار الأقسام.</p>
+        </div>
+
+        <div class="card-grid">
+          <div class="admin-card half-width">
+            <div class="card-head">
+              <h3 class="card-title">لوحة الإدارة</h3>
+            </div>
+            <div class="card-body">
+              <div class="form-group">
+                <label class="form-label">رفع شعار لوحة الإدارة</label>
+                <div class="upload-area upload-area-sm" id="adminLogoDropzone">
+                  <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+                  <span>اختر شعار اللوحة</span>
+                  <input type="file" accept="image/*" class="upload-input" id="adminLogoInput">
+                </div>
+                <div class="img-preview img-preview-sm" id="adminLogoPreview" style="display:none;">
+                  <img id="adminLogoPreviewImg" alt="logo preview">
+                  <button class="img-remove-btn" id="adminLogoRemove">×</button>
+                </div>
+                <input type="hidden" id="adminLogoData">
+              </div>
+              <div class="form-group">
+                <label class="form-label">اسم لوحة الإدارة</label>
+                <input type="text" class="form-control" id="adminBrandName" value="أولاد القاضي | لوحة الإدارة">
+              </div>
+            </div>
+          </div>
+
+          <div class="admin-card half-width">
+            <div class="card-head">
+              <h3 class="card-title">إدارة Sidebar</h3>
+            </div>
+            <div class="card-body">
+              <div id="sidebarSettingsList" class="sidebar-settings-list"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =========================================================
+         SECTION 2: ROLES + DISCOUNTS + FINANCE
+         ========================================================= -->
+      <section class="admin-section" id="section-roles">
+        <div class="section-head">
+          <h2 class="section-title">نظام الصلاحيات والخصومات</h2>
+          <p class="section-desc">تحكم في الصلاحيات، الخصومات الترويجية، وإظهار قسم الماليات حسب الدور الحالي.</p>
+        </div>
+
+        <div class="card-grid">
+          <div class="admin-card half-width">
+            <div class="card-head">
+              <h3 class="card-title">الدور الحالي</h3>
+            </div>
+            <div class="card-body">
+              <div class="form-group">
+                <label class="form-label">اختيار الدور</label>
+                <select class="form-control" id="adminCurrentRole">
+                  <option value="owner">المالك</option>
+                  <option value="general_manager">مدير عام</option>
+                  <option value="customer_service">خدمة عملاء</option>
+                  <option value="data_entry">مدخل بيانات</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">صلاحيات الدور</label>
+                <div class="permissions-box" id="permissionsList"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="admin-card half-width">
+            <div class="card-head">
+              <h3 class="card-title">إدارة المديرين</h3>
+            </div>
+            <div class="card-body">
+              <div class="form-group">
+                <label class="form-label">اسم مدير عام جديد</label>
+                <input type="text" class="form-control" id="newManagerName" placeholder="مثال: محمد">
+              </div>
+              <div class="form-group">
+                <label class="form-label">الدور</label>
+                <input type="text" class="form-control" value="مدير عام" disabled>
+              </div>
+              <button class="btn-primary-admin" id="btnAddManager">إضافة مدير عام</button>
+            </div>
+          </div>
+
+          <div class="admin-card full-width">
+            <div class="card-head">
+              <h3 class="card-title">إظهار قسم الماليات</h3>
+              <div class="toggle-wrapper">
+                <label class="toggle-switch">
+                  <input type="checkbox" id="financeVisibilityToggle" checked>
+                  <span class="toggle-track"></span>
+                </label>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="form-group">
+                <label class="form-label">حالة الرؤية</label>
+                <input type="text" class="form-control" id="financeVisibilityStatus" value="ظاهر" readonly>
+              </div>
+            </div>
+          </div>
+
+          <div class="admin-card full-width">
+            <div class="card-head">
+              <h3 class="card-title">خصم إقناع لخدمة العملاء</h3>
+            </div>
+            <div class="card-body">
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">إجمالي الطلب</label>
+                  <input type="number" class="form-control" id="quickDiscountTotal" value="800" min="0">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">مبلغ الخصم (حد أقصى 50 ج.م)</label>
+                  <input type="number" class="form-control" id="quickDiscountAmount" value="40" min="0" max="50">
+                </div>
+              </div>
+              <div class="form-actions compact">
+                <button class="btn-primary-admin" id="btnQuickDiscount">خصم إقناع</button>
+              </div>
+              <div class="quick-discount-result" id="quickDiscountResult">الإجمالي النهائي: 760 ج.م</div>
+            </div>
+          </div>
+
+              <div class="admin-card full-width">
+            <div class="card-head">
+              <h3 class="card-title">كود الخصم الترويجي</h3>
+              <button class="btn-add-sm" id="btnAddPromoCode">إضافة كود</button>
+            </div>
+            <div class="card-body">
+              <div class="promo-list" id="promoCodesList"></div>
+            </div>
+          </div>
+
+          <div class="admin-card full-width">
+            <div class="card-head">
+              <h3 class="card-title">جدول الصلاحيات التفصيلي للموظفين</h3>
+            </div>
+            <div class="card-body">
+              <div class="employee-permissions-wrap">
+                <div class="employee-permission-form">
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label class="form-label">اسم الموظف</label>
+                      <input type="text" class="form-control" id="employeeNameInput" placeholder="مثال: سارة">
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">الدور</label>
+                      <select class="form-control" id="employeeRoleInput">
+                        <option value="customer_service">خدمة عملاء</option>
+                        <option value="data_entry">مدخل بيانات</option>
+                        <option value="general_manager">مدير عام</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="permission-matrix" id="permissionMatrix"></div>
+                  <div class="form-actions compact">
+                    <button class="btn-primary-admin" id="btnAddEmployeePermission">حفظ صلاحيات الموظف</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =========================================================
+         SECTION 3: CMS CONTENT
+         ========================================================= -->
+      <section class="admin-section" id="section-cms">
+        <div class="section-head">
+          <h2 class="section-title">إدارة المحتوى (CMS)</h2>
+          <p class="section-desc">عدّل عناوين الهيرو، شريط الإعلان، بيانات الفوتر، وآراء العملاء من مكان واحد.</p>
+        </div>
+
+        <div class="card-grid">
+          <div class="admin-card full-width">
+            <div class="card-head">
+              <h3 class="card-title">بيانات الفوتر</h3>
+            </div>
+            <div class="card-body">
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">اسم المتجر</label>
+                  <input type="text" class="form-control" id="footerStoreName" value="أولاد القاضي">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">سطر الحقوق</label>
+                  <input type="text" class="form-control" id="footerCopyright" value="جميع الحقوق محفوظة © 2026 أولاد القاضي">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">البريد الإلكتروني</label>
+                  <input type="email" class="form-control" id="footerEmail" value="hello@awladelkady.com" dir="ltr">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">رقم الهاتف</label>
+                  <input type="tel" class="form-control" id="footerPhone" value="01118060702" dir="ltr">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="admin-card full-width">
+            <div class="card-head">
+              <h3 class="card-title">إضافة رأي عميل</h3>
+            </div>
+            <div class="card-body">
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">اسم العميل</label>
+                  <input type="text" class="form-control" id="reviewCustomerName" placeholder="مثال: محمد أحمد">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">المحافظة</label>
+                  <input type="text" class="form-control" id="reviewCityName" placeholder="مثال: القاهرة">
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">نص الرأي</label>
+                <textarea class="form-control" id="reviewTextInput" rows="3" placeholder="اكتب نص الرأي..."></textarea>
+              </div>
+              <div class="form-group">
+                <label class="form-label">التقييم</label>
+                <div class="star-picker" id="cmsReviewStars">
+                  <button type="button" class="star-btn active" data-val="1">★</button>
+                  <button type="button" class="star-btn active" data-val="2">★</button>
+                  <button type="button" class="star-btn active" data-val="3">★</button>
+                  <button type="button" class="star-btn active" data-val="4">★</button>
+                  <button type="button" class="star-btn active" data-val="5">★</button>
+                </div>
+                <input type="hidden" id="cmsReviewRating" value="5">
+              </div>
+              <button class="btn-primary-admin" id="btnAddCmsReview">حفظ الرأي</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =========================================================
+         SECTION 4: PRODUCTS & CATEGORIES
+         ========================================================= -->
+      <section class="admin-section" id="section-products">
+        <div class="section-head">
+          <h2 class="section-title">المنتجات والأقسام</h2>
+          <p class="section-desc">أضف، عدّل، أو أخفِ المنتجات. أدر الأقسام وأضف بادجات ترويجية.</p>
+        </div>
+
+        <!-- Categories Manager -->
+        <div class="card-grid" style="margin-bottom:1.5rem;">
+          <div class="admin-card full-width">
+            <div class="card-head">
+              <h3 class="card-title">الأقسام (Categories)</h3>
+              <button class="btn-add-sm" id="btnAddCategory">
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                قسم جديد
+              </button>
+            </div>
+            <div class="card-body">
+              <div class="categories-list" id="categoriesList">
+                <!-- Categories rendered by JS -->
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Products Manager -->
+        <div class="card-grid">
+          <div class="admin-card full-width">
+            <div class="card-head">
+              <h3 class="card-title">قائمة المنتجات</h3>
+              <button class="btn-add-sm" id="btnAddProduct">
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                منتج جديد
+              </button>
+            </div>
+            <div class="card-body">
+              <div class="products-table-wrap">
+                <table class="products-table" id="productsTable">
+                  <thead>
+                    <tr>
+                      <th>المنتج</th>
+                      <th>القسم</th>
+                      <th>السعر</th>
+                      <th>البادج</th>
+                      <th>الظهور</th>
+                      <th>إجراءات</th>
+                    </tr>
+                  </thead>
+                  <tbody id="productsTableBody">
+                    <!-- Products rendered by JS -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =========================================================
+         SECTION 4: CONTACT INFO
+         ========================================================= -->
+      <section class="admin-section" id="section-contact">
+        <div class="section-head">
+          <h2 class="section-title">بيانات التواصل</h2>
+          <p class="section-desc">تحكم في أرقام الواتساب وبيانات التواصل التي تظهر في الموقع.</p>
+        </div>
+
+        <div class="card-grid">
+          <div class="admin-card half-width">
+            <div class="card-head">
+              <h3 class="card-title">أرقام التواصل</h3>
+            </div>
+            <div class="card-body">
+              <div class="form-group">
+                <label class="form-label">رقم الواتساب الرئيسي</label>
+                <div class="input-with-icon">
+                  <span class="input-icon">📱</span>
+                  <input type="tel" class="form-control" id="contactWhatsapp" placeholder="01XXXXXXXXX" value="01118060702" dir="ltr">
+                </div>
+                <span class="form-hint">سيُستخدم في زرار الواتساب العائم وكل روابط التواصل</span>
+              </div>
+              <div class="form-group">
+                <label class="form-label">رقم المبيعات (للعرض)</label>
+                <div class="input-with-icon">
+                  <span class="input-icon">📞</span>
+                  <input type="tel" class="form-control" id="contactPhone" placeholder="01XXXXXXXXX" value="01118060702" dir="ltr">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="admin-card half-width">
+            <div class="card-head">
+              <h3 class="card-title">العنوان والموقع</h3>
+            </div>
+            <div class="card-body">
+              <div class="form-group">
+                <label class="form-label">العنوان التفصيلي</label>
+                <textarea class="form-control" id="contactAddress" rows="3">شارع الإصلاح الزراعي، بجوار عمر أفندي، أمام (المان) للعطور</textarea>
+              </div>
+              <div class="form-group">
+                <label class="form-label">رابط خريطة Google Maps (اختياري)</label>
+                <input type="url" class="form-control" id="contactMapsUrl" placeholder="https://maps.google.com/..." dir="ltr">
+              </div>
+            </div>
+          </div>
+
+          <div class="admin-card full-width">
+            <div class="card-head">
+              <h3 class="card-title">روابط السوشيال ميديا</h3>
+            </div>
+            <div class="card-body">
+              <div class="social-grid">
+                <div class="form-group">
+                  <label class="form-label">
+                    <span class="social-icon" style="background:#1877F2;">f</span>
+                    فيسبوك
+                  </label>
+                  <input type="url" class="form-control" id="socialFacebook" placeholder="https://facebook.com/..." dir="ltr">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">
+                    <span class="social-icon" style="background:radial-gradient(circle at 30% 107%, #fdf497 0%, #fd5949 45%, #d6249f 60%, #285AEB 90%);">📸</span>
+                    انستجرام
+                  </label>
+                  <input type="url" class="form-control" id="socialInstagram" placeholder="https://instagram.com/..." dir="ltr">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">
+                    <span class="social-icon" style="background:#FF0000;">▶</span>
+                    يوتيوب
+                  </label>
+                  <input type="url" class="form-control" id="socialYoutube" placeholder="https://youtube.com/..." dir="ltr">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">
+                    <span class="social-icon" style="background:#000;">🎵</span>
+                    تيك توك
+                  </label>
+                  <input type="url" class="form-control" id="socialTiktok" placeholder="https://tiktok.com/..." dir="ltr">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =========================================================
+         SECTION 5: REVIEWS
+         ========================================================= -->
+      <section class="admin-section" id="section-reviews">
+        <div class="section-head">
+          <h2 class="section-title">آراء العملاء</h2>
+          <p class="section-desc">أضف وادرْ آراء العملاء التي تظهر في صفحة الهبوط.</p>
+        </div>
+
+        <div class="card-grid">
+          <!-- Add Review Form -->
+          <div class="admin-card half-width">
+            <div class="card-head">
+              <h3 class="card-title" id="reviewFormTitle">إضافة رأي جديد</h3>
+            </div>
+            <div class="card-body">
+              <input type="hidden" id="editingReviewId" value="">
+              <div class="form-group">
+                <label class="form-label">اسم العميل</label>
+                <input type="text" class="form-control" id="reviewName" placeholder="مثال: أستاذة مروة الشافعي">
+              </div>
+              <div class="form-group">
+                <label class="form-label">المدينة / المنطقة <span class="label-hint">(اختياري)</span></label>
+                <input type="text" class="form-control" id="reviewCity" placeholder="مثال: المعادي — القاهرة">
+              </div>
+              <div class="form-group">
+                <label class="form-label">نص الرأي</label>
+                <textarea class="form-control" id="reviewText" rows="3" placeholder="اكتب رأي العميل هنا..."></textarea>
+              </div>
+              <div class="form-group">
+                <label class="form-label">التقييم</label>
+                <div class="star-picker" id="starPicker">
+                  <button type="button" class="star-btn active" data-val="1">★</button>
+                  <button type="button" class="star-btn active" data-val="2">★</button>
+                  <button type="button" class="star-btn active" data-val="3">★</button>
+                  <button type="button" class="star-btn active" data-val="4">★</button>
+                  <button type="button" class="star-btn active" data-val="5">★</button>
+                </div>
+                <input type="hidden" id="reviewRating" value="5">
+              </div>
+              <div class="form-actions">
+                <button class="btn-primary-admin" id="btnSaveReview">
+                  <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  إضافة الرأي
+                </button>
+                <button class="btn-ghost" id="btnCancelReview" style="display:none;">إلغاء</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Reviews List -->
+          <div class="admin-card half-width">
+            <div class="card-head">
+              <h3 class="card-title">الآراء الحالية</h3>
+              <span class="card-badge" id="reviewsCount">0</span>
+            </div>
+            <div class="card-body">
+              <div class="reviews-list" id="reviewsList">
+                <!-- Reviews rendered by JS -->
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="admin-section" id="section-security">
+        <div class="section-head">
+          <h2 class="section-title">طلبات الأمان</h2>
+          <p class="section-desc">طلبات تغيير بيانات الدخول مرسلة من المدير أو الموظف وتحتاج موافقة المالك فقط.</p>
+        </div>
+
+        <div class="card-grid">
+          <div class="admin-card full-width">
+            <div class="card-head">
+              <h3 class="card-title">قائمة الطلبات الحالية</h3>
+            </div>
+            <div class="card-body">
+              <div id="securityRequestsList" class="security-request-list"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+  </div>
+
+  <!-- ============================================================
+     PRODUCT MODAL (Add / Edit)
+     ============================================================ -->
+  <div class="modal-overlay" id="productModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title" id="productModalTitle">إضافة منتج جديد</h3>
+        <button class="modal-close" id="closeProductModal">×</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="productId">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">اسم المنتج <span class="req">*</span></label>
+            <input type="text" class="form-control" id="productName" placeholder="اسم المنتج كاملاً">
+          </div>
+          <div class="form-group">
+            <label class="form-label">القسم <span class="req">*</span></label>
+            <select class="form-control" id="productCategory">
+              <!-- Options from JS -->
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">المواصفة السريعة <span class="label-hint">(سطر واحد)</span></label>
+          <input type="text" class="form-control" id="productSpec" placeholder="مثال: 6 لتر — 1800 واط — 8 برامج">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">السعر الحالي (ج.م) <span class="req">*</span></label>
+            <input type="number" class="form-control" id="productPrice" placeholder="0" min="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">السعر قبل الخصم (ج.م)</label>
+            <input type="number" class="form-control" id="productOriginalPrice" placeholder="0" min="0">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">حجم الشحنة (بوسطة) <span class="req">*</span></label>
+            <select class="form-control" id="productBostaSize">
+              <option value="" selected>اختر حجم الشحنة...</option>
+              <option value="حجم صغير ومتوسط">حجم صغير ومتوسط</option>
+              <option value="حجم كبير L">حجم كبير L</option>
+              <option value="حجم أكبر XL">حجم أكبر XL</option>
+              <option value="كيس أبيض XXL">كيس أبيض XXL</option>
+              <option value="شحنة كبيرة">شحنة كبيرة</option>
+              <option value="شحنة ضخمة">شحنة ضخمة</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">نسبة الخصم (%)</label>
+            <input type="number" class="form-control" id="productDiscount" placeholder="0" min="0" max="100">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">البادج الترويجي</label>
+            <select class="form-control" id="productBadge">
+              <option value="">بدون بادج</option>
+              <option value="bestseller">⭐ الأكثر مبيعاً</option>
+              <option value="new">🆕 جديد</option>
+              <option value="hot">🔥 عرض محدود</option>
+              <option value="featured">✨ مميز</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">المميزات <span class="label-hint">(سطر لكل ميزة)</span></label>
+          <textarea class="form-control" id="productFeatures" rows="3" placeholder="ميزة 1&#10;ميزة 2&#10;ميزة 3"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">صورة المنتج</label>
+          <div class="upload-area upload-area-sm" id="productImgDropzone">
+            <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+            <span>اضغط لاختيار صورة المنتج</span>
+            <input type="file" accept="image/*" class="upload-input" id="productImgInput">
+          </div>
+          <div class="img-preview img-preview-sm" id="productImgPreview" style="display:none;">
+            <img id="productImgPreviewImg" alt="preview">
+            <button class="img-remove-btn" id="productImgRemove">×</button>
+          </div>
+          <input type="hidden" id="productImgData">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-ghost" id="cancelProductModal">إلغاء</button>
+        <button class="btn-primary-admin" id="btnSaveProduct">حفظ المنتج</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Category Modal -->
+  <div class="modal-overlay" id="categoryModal">
+    <div class="modal-box modal-box-sm">
+      <div class="modal-header">
+        <h3 class="modal-title" id="categoryModalTitle">إضافة قسم جديد</h3>
+        <button class="modal-close" id="closeCategoryModal">×</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="categoryId">
+        <div class="form-group">
+          <label class="form-label">اسم القسم (عربي) <span class="req">*</span></label>
+          <input type="text" class="form-control" id="categoryNameAr" placeholder="مثال: أطقم تقديم">
+        </div>
+        <div class="form-group">
+          <label class="form-label">معرّف القسم (إنجليزي) <span class="req">*</span></label>
+          <input type="text" class="form-control" id="categorySlug" placeholder="مثال: serving-sets" dir="ltr">
+          <span class="form-hint">بدون مسافات، أحرف إنجليزية وشرطة فقط</span>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-ghost" id="cancelCategoryModal">إلغاء</button>
+        <button class="btn-primary-admin" id="btnSaveCategory">حفظ القسم</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="admin-toast-container" id="adminToast"></div>
+
+  <script src="js/businessLogic.js"></script>
+  <script src="js/admin.js"></script>
+</body>
+</html>
