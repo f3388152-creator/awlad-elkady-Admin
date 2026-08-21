@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light">
+  <title>لوحة الإدارة | أولاد القاضي</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./css/admin.css">
+  <script>
+    window.ADMIN_BOOTSTRAP = {
+      apiBase: '/api',
+      ownerPin: '500900',
+      storageBucket: 'admin-media',
+      appName: 'أولاد القاضي | لوحة الإدارة'
+    };
+  </script>
+</head>
+<body>
+  <div class="bg-blobs" aria-hidden="true">
+    <span></span><span></span><span></span>
+  </div>
+
+  <main class="auth-screen" id="authScreen">
+    <section class="auth-card glass-card">
+      <div class="brand-lockup">
+        <div class="brand-mark">أ</div>
+        <div>
+          <h1>لوحة الإدارة الجديدة</h1>
+          <p class="muted">إدارة المنتجات والأوردرات والعمليات اليومية من مكان واحد.</p>
+        </div>
+      </div>
+
+      <div class="auth-tabs" role="tablist">
+        <button class="tab-btn active" data-login-mode="manager" type="button">مدير</button>
+        <button class="tab-btn" data-login-mode="employee" type="button">موظف</button>
+      </div>
+
+      <form class="auth-form active" data-login-form="manager" id="managerLoginForm">
+        <label>
+          <span>كلمة سر المدير</span>
+          <input type="password" name="password" placeholder="اكتب كلمة السر" autocomplete="current-password" required>
+        </label>
+        <button class="primary-btn" type="submit">دخول المدير</button>
+      </form>
+
+      <form class="auth-form" data-login-form="employee" id="employeeLoginForm">
+        <label>
+          <span>رقم الموبايل</span>
+          <input type="tel" name="phone" placeholder="01xxxxxxxxx" autocomplete="tel" required>
+        </label>
+        <button class="primary-btn" type="submit">دخول الموظف</button>
+      </form>
+    </section>
+  </main>
+
+  <div class="app-shell hidden" id="appShell">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-top">
+        <div class="brand-lockup compact">
+          <div class="brand-mark">أ</div>
+          <div>
+            <p class="eyebrow">Awlad El Kady</p>
+            <h2>لوحة الإدارة</h2>
+          </div>
+        </div>
+        <button class="icon-btn mobile-close" id="closeSidebarBtn" type="button">×</button>
+      </div>
+
+      <nav class="sidebar-nav" id="sidebarNav">
+        <button class="nav-item active" data-section="dashboard" type="button">الداشبورد</button>
+        <button class="nav-item" data-section="products" type="button">المنتجات</button>
+        <button class="nav-item" data-section="orders" type="button">الأوردرات</button>
+        <button class="nav-item" data-section="finance" type="button">الماليات</button>
+        <button class="nav-item" data-section="cms" type="button">إدارة المحتوى</button>
+        <button class="nav-item" data-section="employees" type="button">الموظفين والصلاحيات</button>
+        <button class="nav-item owner-only" data-section="security" type="button">طلبات الأمان</button>
+      </nav>
+
+      <div class="sidebar-card">
+        <p class="label">مستوى الدخول</p>
+        <div class="role-chip" id="roleChip">غير مسجل</div>
+        <p class="muted small" id="sessionText">سجل دخولك عشان تبدأ.</p>
+      </div>
+    </aside>
+
+    <div class="app-backdrop" id="appBackdrop"></div>
+
+    <section class="content">
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="icon-btn mobile-open" id="openSidebarBtn" type="button">☰</button>
+          <div>
+            <p class="eyebrow" id="sectionEyebrow">Dashboard</p>
+            <h2 id="sectionTitle">الداشبورد</h2>
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <span class="status-pill" id="connectionStatus">جارٍ التحضير</span>
+          <button class="ghost-btn" id="syncBtn" type="button">مزامنة</button>
+          <button class="ghost-btn danger" id="logoutBtn" type="button">خروج</button>
+        </div>
+      </header>
+
+      <div class="page-shell">
+        <section class="page-panel active" data-panel="dashboard">
+          <div id="dashboardRoot"></div>
+        </section>
+
+        <section class="page-panel" data-panel="products">
+          <div id="productsRoot"></div>
+        </section>
+
+        <section class="page-panel" data-panel="orders">
+          <div id="ordersRoot"></div>
+        </section>
+
+        <section class="page-panel" data-panel="finance">
+          <div id="financeRoot"></div>
+        </section>
+
+        <section class="page-panel" data-panel="cms">
+          <div id="cmsRoot"></div>
+        </section>
+
+        <section class="page-panel" data-panel="employees">
+          <div id="employeesRoot"></div>
+        </section>
+
+        <section class="page-panel owner-only-panel" data-panel="security">
+          <div id="securityRoot"></div>
+        </section>
+      </div>
+    </section>
+  </div>
+
+  <div class="modal hidden" id="pinModal" aria-hidden="true">
+    <div class="modal-card glass-card">
+      <button class="icon-btn close-modal" id="closePinModalBtn" type="button">×</button>
+      <p class="eyebrow">Super Admin</p>
+      <h3>أدخل الـ PIN السري</h3>
+      <p class="muted">الدخول الكامل للمالك فقط.</p>
+      <form id="pinForm" class="modal-form">
+        <input type="password" id="pinInput" placeholder="••••••" maxlength="6" inputmode="numeric" required>
+        <button class="primary-btn" type="submit">فتح الصلاحيات</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="toast-stack" id="toastStack"></div>
+
+  <script src="./js/config.js"></script>
+  <script src="./js/api.js"></script>
+  <script src="./js/app.js"></script>
+</body>
+</html>
