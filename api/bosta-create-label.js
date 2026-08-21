@@ -1,4 +1,4 @@
-const { selectRows, insertRows } = require('./_supabase');
+﻿const { selectRows, insertRows } = require('./_supabase');
 
 function sendJson(res, status, payload) {
   res.status(status).json(payload);
@@ -175,6 +175,7 @@ module.exports = async (req, res) => {
     let insertedOrder = null;
     if (payload.persistOrder !== false) {
       const orderRow = {
+        order_number: payload.orderNumber || order.orderNumber || order.id || `AWLAD-${Date.now()}`,
         customer_name: customer.name || order.customerName || '',
         phone: customer.phone || order.phone || '',
         governorate: customer.governorate || payload.governorate || order.governorate || '',
@@ -182,7 +183,8 @@ module.exports = async (req, res) => {
         shipping_fee: shippingFee,
         total_amount: codAmount,
         status: bostaResponse?.status || 'label_created',
-        bosta_tracking_number: bostaResponse?.trackingNumber || bostaResponse?.tracking_number || payload.trackingNumber || null
+        bosta_tracking_number: bostaResponse?.trackingNumber || bostaResponse?.tracking_number || payload.trackingNumber || null,
+        tracking_source: 'bosta_create_label'
       };
 
       try {
@@ -209,3 +211,4 @@ module.exports = async (req, res) => {
     });
   }
 };
+

@@ -1,4 +1,4 @@
-window.AdminSupabaseAPI = (() => {
+﻿window.AdminSupabaseAPI = (() => {
   function buildUrl(baseUrl, path, query = {}) {
     const normalizedBase = String(baseUrl || '').replace(/\/$/, '');
     const normalizedPath = String(path || '').startsWith('/') ? path : `/${path}`;
@@ -175,3 +175,4 @@ window.AdminSupabaseAPI = (() => {
 
   return { createClient };
 })();
+

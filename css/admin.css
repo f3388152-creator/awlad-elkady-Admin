@@ -1,4 +1,4 @@
-:root {
+﻿:root {
   --cream: #f8f4ea;
   --cream-2: #f2ebdf;
   --cream-3: #e9e1d3;
@@ -791,6 +791,30 @@ tbody tr:hover {
   padding: 22px;
 }
 
+#pinModal .modal-card {
+  width: min(640px, 94vw);
+  padding: clamp(24px, 4vw, 40px);
+  min-height: 420px;
+  display: grid;
+  gap: 12px;
+  align-content: center;
+}
+
+#pinModal .modal-card h3 {
+  font-size: clamp(1.8rem, 2.3vw, 2.5rem);
+  line-height: 1.2;
+}
+
+#pinModal .modal-form {
+  margin-top: 10px;
+  gap: 14px;
+}
+
+#pinModal input {
+  font-size: 1.1rem;
+  padding: 16px 18px;
+}
+
 .close-modal {
   position: absolute;
   top: 16px;
@@ -1016,3 +1040,4 @@ tbody tr:hover {
     width: min(92vw, 300px);
   }
 }
+

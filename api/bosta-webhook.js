@@ -1,4 +1,4 @@
-const { selectRows, updateRows } = require('./_supabase');
+﻿const { selectRows, updateRows } = require('./_supabase');
 
 function sendJson(res, status, payload) {
   res.status(status).json(payload);
@@ -23,6 +23,9 @@ async function findOrderByIdentifiers(identifiers) {
   const queries = [];
   if (identifiers.trackingNumber) {
     queries.push(`bosta_tracking_number=eq.${identifiers.trackingNumber}`);
+  }
+  if (identifiers.orderNumber) {
+    queries.push(`order_number=eq.${identifiers.orderNumber}`);
   }
 
   for (const query of queries) {
@@ -100,3 +103,4 @@ module.exports = async (req, res) => {
     });
   }
 };
+

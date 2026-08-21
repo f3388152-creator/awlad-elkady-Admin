@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
   const BOOTSTRAP = window.ADMIN_BOOTSTRAP || {};
   const API_BASE = BOOTSTRAP.apiBase || '/api';
   const OWNER_PIN = String(BOOTSTRAP.ownerPin || '500900');
@@ -16,6 +16,12 @@
     { value: 'xxl', label: 'XXL' },
     { value: 'large', label: 'كبيرة' },
     { value: 'huge', label: 'ضخمة' }
+  ];
+
+  const PRODUCT_CATEGORY_OPTIONS = [
+    { value: 'kitchen-tools', label: 'أدوات مطبخ' },
+    { value: 'storage-organization', label: 'تنظيم وتخزين' },
+    { value: 'furniture', label: 'أثاث' }
   ];
 
   const SHIPPING_FEE_FIELD_BY_WEIGHT = {
@@ -39,7 +45,7 @@
 
   const PERMISSIONS = {
     super_admin: { all: true, security: true, cms: true, finance: true, orders: true, products: true, employees: true },
-    manager: { all: false, security: false, cms: true, finance: true, orders: true, products: true, employees: true },
+    manager: { all: false, security: false, cms: true, finance: true, orders: true, products: true, employees: false },
     employee: { all: false, security: false, cms: false, finance: false, orders: true, products: false, employees: false }
   };
 
@@ -54,22 +60,24 @@
       employees: [],
       site_settings: [],
       security_requests: [],
+      tracking_events: [],
       returns: [],
       operating_expenses: [],
       shipping_rates: []
     },
-    ui: {
-      loading: false,
-      sidebarOpen: false,
-      authMode: 'manager',
-      pinVisible: false,
-      heroImagePreviewUrl: '',
-      editingProductId: null,
-      editingEmployeeId: null,
-      filters: {
-        products: '',
-        orders: '',
-        employees: ''
+      ui: {
+        loading: false,
+        sidebarOpen: false,
+        authMode: 'manager',
+        pinVisible: false,
+        heroImagePreviewUrl: '',
+        editingProductId: null,
+        editingOrderId: null,
+        editingEmployeeId: null,
+        filters: {
+          products: '',
+          orders: '',
+          employees: ''
       }
     }
   };
@@ -101,6 +109,8 @@
     refs.pinModal = document.getElementById('pinModal');
     refs.pinForm = document.getElementById('pinForm');
     refs.pinInput = document.getElementById('pinInput');
+    refs.dataChangeModal = document.getElementById('dataChangeModal');
+    refs.dataChangeRequestForm = document.getElementById('dataChangeRequestForm');
     refs.toastStack = document.getElementById('toastStack');
     refs.dashboardRoot = document.getElementById('dashboardRoot');
     refs.productsRoot = document.getElementById('productsRoot');
@@ -111,9 +121,53 @@
     refs.securityRoot = document.getElementById('securityRoot');
   }
 
+  function ensureAuxiliaryUI() {
+    if (refs.authScreen && !document.querySelector('[data-action="open-data-change-request"]')) {
+      const actionBtn = document.createElement('button');
+      actionBtn.className = 'ghost-btn';
+      actionBtn.type = 'button';
+      actionBtn.dataset.action = 'open-data-change-request';
+      actionBtn.style.marginTop = '12px';
+      actionBtn.style.width = '100%';
+      actionBtn.textContent = 'طلب تعديل البيانات';
+      refs.authScreen.querySelector('.auth-card')?.appendChild(actionBtn);
+    }
+
+    if (!refs.dataChangeModal) {
+      const modal = document.createElement('div');
+      modal.className = 'modal hidden';
+      modal.id = 'dataChangeModal';
+      modal.setAttribute('aria-hidden', 'true');
+      modal.innerHTML = `
+        <div class="modal-card glass-card">
+          <button class="icon-btn close-modal" id="closeDataChangeModalBtn" type="button">×</button>
+          <p class="eyebrow">تعديل البيانات</p>
+          <h3>طلب تعديل البيانات</h3>
+          <p class="muted">لو نسيت كلمة السر أو محتاج تغيّر رقمك، ابعت طلب للمالك.</p>
+          <!--�� ���� ���� ���� �� ������� ������ɡ ���� ��� ������ �� ���.</p>
+          -->
+          <form id="dataChangeRequestForm" class="modal-form">
+            <input type="text" name="name" placeholder="الاسم" required>
+            <input type="tel" name="phone" placeholder="رقم الموبايل" required>
+            <select name="role" required>
+              <option value="employee">موظف</option>
+              <option value="manager">مدير</option>
+            </select>
+            <textarea name="request_text" rows="3" placeholder="اكتب التعديل المطلوب" required></textarea>
+            <button class="primary-btn" type="submit">إرسال الطلب</button>
+          </form>
+        </div>
+      `;
+      document.body.appendChild(modal);
+      refs.dataChangeModal = modal;
+      refs.dataChangeRequestForm = modal.querySelector('#dataChangeRequestForm');
+    }
+  }
+
   async function init() {
     cacheRefs();
     bindStaticEvents();
+    ensureAuxiliaryUI();
     applyAuthMode('manager');
     await loadConfig();
     state.client = AdminSupabaseAPI.createClient({
@@ -239,7 +293,7 @@
 
   function applyRoleVisibility() {
     const isOwner = isSuperAdmin();
-    document.querySelectorAll('.owner-only').forEach((el) => {
+    document.querySelectorAll('.owner-only, [data-section="employees"], [data-panel="employees"]').forEach((el) => {
       el.classList.toggle('hidden', !isOwner);
     });
     document.querySelectorAll('.owner-only-panel').forEach((el) => {
@@ -284,10 +338,14 @@
         setSidebar(false);
       } else if (actionName === 'edit-product') {
         startEditProduct(id);
+      } else if (actionName === 'edit-order') {
+        startEditOrder(id);
       } else if (actionName === 'delete-product') {
         deleteProduct(id);
       } else if (actionName === 'edit-employee') {
         startEditEmployee(id);
+      } else if (actionName === 'toggle-employee-status') {
+        toggleEmployeeStatus(id);
       } else if (actionName === 'delete-employee') {
         deleteEmployee(id);
       } else if (actionName === 'approve-request') {
@@ -296,13 +354,20 @@
         updateSecurityRequest(id, 'rejected');
       } else if (actionName === 'new-request') {
         openSecurityRequestDraft();
+      } else if (actionName === 'open-data-change-request') {
+        openDataChangeRequestModal();
       } else if (actionName === 'close-pin') {
         closePinModal();
+      } else if (actionName === 'close-data-change') {
+        closeDataChangeRequestModal();
       } else if (actionName === 'save-draft') {
         saveDraftFromCard(type);
       } else if (actionName === 'cancel-product-edit') {
         state.ui.editingProductId = null;
         renderProducts();
+      } else if (actionName === 'cancel-order-edit') {
+        state.ui.editingOrderId = null;
+        renderOrders();
       } else if (actionName === 'cancel-employee-edit') {
         state.ui.editingEmployeeId = null;
         renderEmployees();
@@ -336,6 +401,10 @@
 
     if (event.target === document.getElementById('closePinModalBtn')) {
       closePinModal();
+    }
+
+    if (event.target === document.getElementById('closeDataChangeModalBtn')) {
+      closeDataChangeRequestModal();
     }
   }
 
@@ -478,6 +547,12 @@
     if (formId === 'securityRequestForm') {
       event.preventDefault();
       await handleSecurityRequestSubmit(form);
+      return;
+    }
+
+    if (formId === 'dataChangeRequestForm') {
+      event.preventDefault();
+      await handleDataChangeRequestSubmit(form);
     }
   }
 
@@ -493,6 +568,10 @@
       const match = (rows || []).find((row) => String(row.password_hash || '').trim() === hashedPassword);
       if (!match) {
         toast('كلمة السر غير صحيحة', 'error');
+        return;
+      }
+      if (match.is_active === false) {
+        toast('الحساب موقوف. كلم المالك.', 'error');
         return;
       }
 
@@ -525,6 +604,10 @@
       const match = rows && rows[0];
       if (!match) {
         toast('رقم الموبايل غير موجود', 'error');
+        return;
+      }
+      if (match.is_active === false) {
+        toast('الحساب موقوف. كلم المالك.', 'error');
         return;
       }
 
@@ -579,6 +662,20 @@
     refs.pinModal.setAttribute('aria-hidden', 'true');
   }
 
+  function openDataChangeRequestModal() {
+    if (!refs.dataChangeModal) return;
+    refs.dataChangeModal.classList.remove('hidden');
+    refs.dataChangeModal.setAttribute('aria-hidden', 'false');
+    const firstInput = refs.dataChangeModal.querySelector('input[name="name"]');
+    setTimeout(() => firstInput?.focus(), 60);
+  }
+
+  function closeDataChangeRequestModal() {
+    if (!refs.dataChangeModal) return;
+    refs.dataChangeModal.classList.add('hidden');
+    refs.dataChangeModal.setAttribute('aria-hidden', 'true');
+  }
+
   function handleLogout() {
     clearSession();
     state.activeSection = 'dashboard';
@@ -624,12 +721,13 @@
       state.ui.loading = true;
       setConnectionStatus('جارٍ المزامنة');
 
-      const [products, orders, employees, siteSettings, securityRequests, returns, expenses, shippingRates] = await Promise.all([
+      const [products, orders, employees, siteSettings, securityRequests, trackingEvents, returns, expenses, shippingRates] = await Promise.all([
         safeSelect('products'),
         safeSelect('orders'),
         safeSelect('employees'),
         safeSelect('site_settings'),
         safeSelect('security_requests'),
+        safeSelect('tracking_events'),
         safeSelect('returns'),
         safeSelect('operating_expenses'),
         safeSelect('shipping_rates')
@@ -640,6 +738,7 @@
       state.data.employees = normalizeEmployees(employees);
       state.data.site_settings = Array.isArray(siteSettings) ? siteSettings : [];
       state.data.security_requests = normalizeSecurityRequests(securityRequests);
+      state.data.tracking_events = normalizeTrackingEvents(trackingEvents);
       state.data.returns = normalizeReturns(returns);
       state.data.operating_expenses = normalizeExpenses(expenses);
       state.data.shipping_rates = normalizeShippingRates(shippingRates);
@@ -706,6 +805,7 @@
       image_url: row.image_url || '',
       stock_qty: toNumber(row.stock_qty),
       bosta_weight: row.bosta_weight || 'small_medium',
+      category: normalizeCategory(row.category || row.category_name || inferCategoryFromText(`${row.title || ''} ${row.description || ''}`)),
       is_visible: row.is_visible !== false
     }));
   }
@@ -733,7 +833,8 @@
       phone: normalizePhone(row.phone || ''),
       role: normalizeRole(row.role, 'employee'),
       permissions: normalizePermissions(row.permissions, row.role || 'employee'),
-      password_hash: row.password_hash || ''
+      password_hash: row.password_hash || '',
+      is_active: row.is_active !== false
     }));
   }
 
@@ -765,8 +866,24 @@
       id: row.id || row.request_id || '',
       name: row.name || '',
       role: row.role || 'employee',
+      request_type: row.request_type || 'general',
       request_text: row.request_text || row.text || '',
       status: row.status || 'pending',
+      created_at: row.created_at || row.createdAt || new Date().toISOString()
+    }));
+  }
+
+  function normalizeTrackingEvents(rows) {
+    return (rows || []).map((row) => ({
+      ...row,
+      id: row.id,
+      lookup_phone: row.lookup_phone || '',
+      lookup_order_number: row.lookup_order_number || '',
+      lookup_tracking_number: row.lookup_tracking_number || '',
+      matched_order_id: row.matched_order_id || null,
+      matched_customer_name: row.matched_customer_name || '',
+      matched_phone: row.matched_phone || '',
+      matched_status: row.matched_status || 'not_found',
       created_at: row.created_at || row.createdAt || new Date().toISOString()
     }));
   }
@@ -849,6 +966,37 @@
     return String(value || '').replace(/[^\d+]/g, '').replace(/^20/, '0');
   }
 
+  function normalizeCategory(value) {
+    const raw = String(value || '').trim().toLowerCase();
+    if (!raw) return inferCategoryFromText('');
+    const aliases = {
+      kitchen: 'kitchen-tools',
+      kitchen_tools: 'kitchen-tools',
+      'kitchen-tools': 'kitchen-tools',
+      'أدوات مطبخ': 'kitchen-tools',
+      storage: 'storage-organization',
+      storage_organization: 'storage-organization',
+      'storage-organization': 'storage-organization',
+      'تنظيم وتخزين': 'storage-organization',
+      furniture: 'furniture',
+      'أثاث': 'furniture'
+    };
+    return aliases[raw] || raw;
+  }
+
+  function inferCategoryFromText(text) {
+    const raw = String(text || '').toLowerCase();
+    if (/تنظيم|تخزين|storage|organi/i.test(raw)) return 'storage-organization';
+    if (/أثاث|furniture|كرسي|طاولة|ترابيزة|table|chair/i.test(raw)) return 'furniture';
+    return 'kitchen-tools';
+  }
+
+  function getCategoryLabel(value) {
+    const normalized = normalizeCategory(value);
+    const option = PRODUCT_CATEGORY_OPTIONS.find((item) => item.value === normalized);
+    return option ? option.label : normalized;
+  }
+
   function escapeHtml(value) {
     return String(value ?? '')
       .replaceAll('&', '&amp;')
@@ -907,7 +1055,7 @@
     const returnsValue = state.data.returns.reduce((sum, row) => sum + toNumber(row.amount), 0);
     const profit = sales - expenses - returnsValue;
     const newOrders = state.data.orders.filter((row) => isRecent(row.created_at, 1)).length;
-    const lowStock = state.data.products.filter((row) => toNumber(row.stock) <= 5).length;
+    const lowStock = state.data.products.filter((row) => toNumber(row.stock_qty) <= 5).length;
 
     refs.dashboardRoot.innerHTML = `
       <div class="stack">
@@ -955,6 +1103,17 @@
             <button class="mini-btn primary" type="button" data-panel-switch="orders">فتح صفحة الأوردرات</button>
           </div>
           ${renderOrdersTable(state.data.orders.slice(0, 6), true)}
+        </article>
+
+        <article class="card">
+          <div class="section-toolbar">
+            <div>
+              <p class="eyebrow">Tracking monitor</p>
+              <h3>آخر محاولات تتبع الطلبات</h3>
+            </div>
+            <span class="pill">${nf.format(state.data.tracking_events.length)} زيارة</span>
+          </div>
+          ${state.data.tracking_events.length ? `<div class="stack">${state.data.tracking_events.slice(0, 8).map((event) => `<div class="chip" style="justify-content:space-between;gap:12px"><span><strong>${escapeHtml(event.matched_customer_name || 'غير معروف')}</strong> — ${escapeHtml(event.lookup_order_number || event.lookup_phone || event.lookup_tracking_number || 'بحث غير محدد')}</span><span>${escapeHtml(event.matched_status || 'not_found')} · ${formatDate(event.created_at)}</span></div>`).join('')}</div>` : '<div class="empty-state">مفيش محاولات تتبع مسجلة لسه.</div>'}
         </article>
       </div>
     `;
@@ -1014,7 +1173,7 @@
 
   function renderProducts() {
     const editing = state.data.products.find((row) => String(row.id) === String(state.ui.editingProductId)) || null;
-    const productTable = renderProductsTable(filterByQuery(state.data.products, state.ui.filters.products, ['title', 'description', 'bosta_weight']));
+    const productTable = renderProductsTable(filterByQuery(state.data.products, state.ui.filters.products, ['title', 'description', 'bosta_weight', 'category']));
 
     refs.productsRoot.innerHTML = `
       <div class="stack">
@@ -1053,6 +1212,12 @@
                 <span>وزن بوسطة</span>
                 <select name="bosta_weight" required>
                   ${PRODUCT_WEIGHT_OPTIONS.map((option) => `<option value="${option.value}" ${String(editing?.bosta_weight || 'small_medium') === option.value ? 'selected' : ''}>${option.label}</option>`).join('')}
+                </select>
+              </label>
+              <label class="field">
+                <span>القسم</span>
+                <select name="category" required>
+                  ${PRODUCT_CATEGORY_OPTIONS.map((option) => `<option value="${option.value}" ${normalizeCategory(editing?.category || '') === option.value ? 'selected' : ''}>${option.label}</option>`).join('')}
                 </select>
               </label>
               <label class="checkbox-pill" style="align-self:end">
@@ -1109,6 +1274,7 @@
         <td>${formatCurrency(row.original_price)}</td>
         <td>${nf.format(row.stock_qty)}</td>
         <td><span class="size-badge">${renderWeightLabel(row.bosta_weight)}</span></td>
+        <td>${escapeHtml(getCategoryLabel(row.category))}</td>
         <td>${row.is_visible ? '<span class="status-badge success">ظاهر</span>' : '<span class="status-badge danger">مخفي</span>'}</td>
         <td>
           <div class="row-actions">
@@ -1130,6 +1296,7 @@
               <th>قبل الخصم</th>
               <th>المخزون</th>
               <th>الوزن</th>
+              <th>القسم</th>
               <th>الحالة</th>
               <th>إجراءات</th>
             </tr>
@@ -1143,6 +1310,9 @@
   function renderOrders() {
     const orderFormOptions = state.data.products.map((product) => `<option value="${escapeHtml(product.id)}">${escapeHtml(product.title)} - ${formatCurrency(product.price)}</option>`).join('');
     const filteredOrders = filterByQuery(state.data.orders, state.ui.filters.orders, ['customer_name', 'phone', 'governorate', 'status', 'bosta_tracking_number']);
+    const editing = state.data.orders.find((row) => String(row.id) === String(state.ui.editingOrderId)) || null;
+    const orderFormTitle = editing ? 'تعديل أوردر' : 'إنشاء أوردر جديد';
+    const orderFormButton = editing ? 'حفظ التعديل' : 'إنشاء الأوردر';
 
     refs.ordersRoot.innerHTML = `
       <div class="stack">
@@ -1151,49 +1321,65 @@
             <div class="section-toolbar">
               <div>
                 <p class="eyebrow">Create</p>
-                <h3>إنشاء أوردر جديد</h3>
+                <h3>${orderFormTitle}</h3>
               </div>
               <span class="pill">Backend shipping calc</span>
             </div>
             <form id="orderForm" class="section-form">
+              <input type="hidden" name="id" value="${escapeHtml(editing?.id || '')}">
               <div class="field-grid cols-2">
                 <label class="field">
                   <span>اسم العميل</span>
-                  <input name="customer_name" required>
+                  <input name="customer_name" required value="${escapeHtml(editing?.customer_name || '')}">
                 </label>
                 <label class="field">
                   <span>رقم الموبايل</span>
-                  <input name="phone" required>
+                  <input name="phone" required value="${escapeHtml(editing?.phone || '')}">
                 </label>
               </div>
               <div class="field-grid cols-2">
                 <label class="field">
                   <span>المحافظة</span>
-                  <input name="governorate" required>
+                  <input name="governorate" required value="${escapeHtml(editing?.governorate || '')}">
                 </label>
                 <label class="field">
                   <span>عنوان التوصيل</span>
-                  <input name="address" required>
+                  <input name="address" required value="${escapeHtml(editing?.address || '')}">
                 </label>
               </div>
               <div class="field-grid cols-2">
                 <label class="field">
                   <span>المنتج</span>
-                  <select name="product_id" required>
+                  <select name="product_id" ${editing ? '' : 'required'}>
                     <option value="">اختار المنتج</option>
                     ${orderFormOptions}
                   </select>
                 </label>
                 <label class="field">
                   <span>الكمية</span>
-                  <input name="quantity" type="number" min="1" step="1" value="1" required>
+                  <input name="quantity" type="number" min="1" step="1" value="${escapeHtml(editing?.quantity || 1)}" required>
+                </label>
+              </div>
+              <div class="field-grid cols-2">
+                <label class="field">
+                  <span>حالة الشحن</span>
+                  <select name="status">
+                    ${['pending', 'processing', 'label_created', 'shipped', 'delivered', 'cancelled'].map((status) => `<option value="${status}" ${String(editing?.status || 'pending') === status ? 'selected' : ''}>${status}</option>`).join('')}
+                  </select>
+                </label>
+                <label class="field">
+                  <span>رقم التتبع</span>
+                  <input name="bosta_tracking_number" value="${escapeHtml(editing?.bosta_tracking_number || '')}">
                 </label>
               </div>
               <label class="field">
                 <span>ملاحظات</span>
-                <textarea name="notes"></textarea>
+                <textarea name="notes">${escapeHtml(editing?.notes || '')}</textarea>
               </label>
-              <button class="primary-btn" type="submit">إنشاء الأوردر وطلب بوليصة بوسطة</button>
+              <div class="toolbar-actions">
+                <button class="primary-btn" type="submit">${orderFormButton}</button>
+                ${editing ? '<button class="ghost-btn" type="button" data-action="cancel-order-edit">إلغاء التعديل</button>' : ''}
+              </div>
             </form>
           </article>
 
@@ -1239,6 +1425,11 @@
         <td>${formatCurrency(row.total_amount)}</td>
         <td>${formatCurrency(row.shipping_fee)}</td>
         <td>${escapeHtml(row.bosta_tracking_number || ' - ')}</td>
+        <td>
+          <div class="row-actions">
+            <button class="mini-btn primary" type="button" data-action="edit-order" data-id="${escapeHtml(row.id)}">تعديل</button>
+          </div>
+        </td>
       </tr>
     `).join('');
 
@@ -1255,6 +1446,7 @@
               <th>الإجمالي</th>
               <th>الشحن</th>
               <th>Tracking</th>
+              <th>إجراءات</th>
             </tr>
           </thead>
           <tbody>${html}</tbody>
@@ -1470,6 +1662,10 @@
   }
 
   function renderEmployees() {
+    if (!isSuperAdmin()) {
+      refs.employeesRoot.innerHTML = '<div class="empty-state">القسم ده للمالك فقط.</div>';
+      return;
+    }
     const editing = state.data.employees.find((row) => String(row.id) === String(state.ui.editingEmployeeId)) || null;
     const filteredEmployees = filterByQuery(state.data.employees, state.ui.filters.employees, ['name', 'phone', 'role']);
     refs.employeesRoot.innerHTML = `
@@ -1505,6 +1701,12 @@
               <label class="field ${editing?.role === 'employee' ? 'hidden' : ''}" data-employee-password-wrap>
                 <span>كلمة السر</span>
                 <input name="password" type="password" placeholder="${editing ? 'اتركها فارغة لو مش هتغيرها' : 'اكتب كلمة السر'}">
+              </label>
+            </div>
+            <div class="field-grid cols-2">
+              <label class="checkbox-pill">
+                <input type="checkbox" name="is_active" ${editing?.is_active !== false ? 'checked' : ''}>
+                <span>الحساب نشط</span>
               </label>
             </div>
             <div>
@@ -1548,10 +1750,11 @@
         <td>${escapeHtml(row.phone || ' - ')}</td>
         <td>${renderRoleBadge(row.role)}</td>
         <td>${renderPermissionsSummary(row.permissions)}</td>
-        <td>${row.role === 'super_admin' ? '<span class="role-badge super">مفتوح بالكامل</span>' : '<span class="status-badge success">نشط</span>'}</td>
+        <td>${row.role === 'super_admin' ? '<span class="role-badge super">مفتوح بالكامل</span>' : (row.is_active === false ? '<span class="status-badge danger">موقوف</span>' : '<span class="status-badge success">نشط</span>')}</td>
         <td>
           <div class="row-actions">
             <button class="mini-btn primary" type="button" data-action="edit-employee" data-id="${escapeHtml(row.id)}">تعديل</button>
+            ${row.role === 'super_admin' ? '' : `<button class="mini-btn" type="button" data-action="toggle-employee-status" data-id="${escapeHtml(row.id)}">${row.is_active === false ? 'تنشيط' : 'إيقاف'}</button>`}
             <button class="mini-btn danger" type="button" data-action="delete-employee" data-id="${escapeHtml(row.id)}">حذف</button>
           </div>
         </td>
@@ -1682,6 +1885,7 @@
     if (!state.client) return;
     const data = new FormData(form);
     const id = data.get('id')?.toString().trim();
+    const current = id ? state.data.products.find((row) => String(row.id) === String(id)) || null : null;
     const title = data.get('title')?.toString().trim();
     const price = toNumber(data.get('price'));
     const original_price = toNumber(data.get('original_price'));
@@ -1698,7 +1902,19 @@
         image_url = uploaded.publicUrl;
       }
 
+      const category = normalizeCategory(data.get('category')?.toString().trim() || current?.category || '');
       const payload = {
+        title,
+        description,
+        price,
+        original_price,
+        image_url,
+        stock_qty,
+        bosta_weight,
+        category,
+        is_visible
+      };
+      const fallbackPayload = {
         title,
         description,
         price,
@@ -1710,10 +1926,26 @@
       };
 
       if (id) {
-        await state.client.update('products', payload, [`id=eq.${id}`]);
+        try {
+          await state.client.update('products', payload, [`id=eq.${id}`]);
+        } catch (error) {
+          if (String(error.message || '').toLowerCase().includes('category') || error.status === 400) {
+            await state.client.update('products', fallbackPayload, [`id=eq.${id}`]);
+          } else {
+            throw error;
+          }
+        }
         toast('تم تحديث المنتج', 'success');
       } else {
-        await state.client.insert('products', payload);
+        try {
+          await state.client.insert('products', payload);
+        } catch (error) {
+          if (String(error.message || '').toLowerCase().includes('category') || error.status === 400) {
+            await state.client.insert('products', fallbackPayload);
+          } else {
+            throw error;
+          }
+        }
         toast('تمت إضافة المنتج', 'success');
       }
 
@@ -1727,18 +1959,39 @@
   async function handleOrderCreate(form) {
     if (!state.client) return;
     const data = new FormData(form);
+    const id = data.get('id')?.toString().trim();
+    const current = id ? state.data.orders.find((row) => String(row.id) === String(id)) || null : null;
     const productId = data.get('product_id')?.toString().trim();
     const product = state.data.products.find((row) => String(row.id) === String(productId));
     const quantity = toNumber(data.get('quantity')) || 1;
     const governorate = data.get('governorate')?.toString().trim();
     const rate = findShippingRateForGovernorate(governorate);
+    const status = data.get('status')?.toString().trim() || current?.status || 'pending';
+    const bostaTrackingNumber = data.get('bosta_tracking_number')?.toString().trim() || current?.bosta_tracking_number || '';
 
-    if (!product) {
+    if (!id && !product) {
       toast('اختار المنتج الأول', 'error');
       return;
     }
 
     try {
+      if (id) {
+        await state.client.update('orders', {
+          customer_name: data.get('customer_name')?.toString().trim() || current?.customer_name || '',
+          phone: normalizePhone(data.get('phone')?.toString() || current?.phone || ''),
+          governorate: governorate || current?.governorate || '',
+          address: data.get('address')?.toString().trim() || current?.address || '',
+          status,
+          bosta_tracking_number: bostaTrackingNumber
+        }, [`id=eq.${id}`]);
+
+        toast('طھظ… طھط­ط¯ظٹط« ط§ظ„ط·ظ„ط¨', 'success');
+        state.ui.editingOrderId = null;
+        form.reset();
+        await refreshAll();
+        return;
+      }
+
       const response = await fetch(`${API_BASE}/bosta-create-label`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1878,7 +2131,8 @@
       phone: normalizePhone(data.get('phone')),
       role: data.get('role')?.toString().trim() || 'employee',
       password_hash: password ? await hashText(password) : (current?.password_hash || ''),
-      permissions: JSON.stringify(permissions)
+      permissions: JSON.stringify(permissions),
+      is_active: form.querySelector('[name="is_active"]')?.checked !== false
     };
 
     try {
@@ -1901,6 +2155,7 @@
     const request = {
       name: data.get('name')?.toString().trim(),
       role: data.get('role')?.toString().trim(),
+      request_type: data.get('request_type')?.toString().trim() || 'general',
       request_text: data.get('request_text')?.toString().trim(),
       status: 'pending',
       created_at: new Date().toISOString()
@@ -1910,6 +2165,28 @@
       await state.client.insert('security_requests', request);
       toast('تم إرسال طلب الأمان للمالك', 'success');
       form.reset();
+      await refreshAll();
+    } catch (error) {
+      toast(error.message, 'error');
+    }
+  }
+
+  async function handleDataChangeRequestSubmit(form) {
+    const data = new FormData(form);
+    const request = {
+      name: data.get('name')?.toString().trim(),
+      role: data.get('role')?.toString().trim() || 'employee',
+      request_type: 'data_change',
+      request_text: data.get('request_text')?.toString().trim(),
+      status: 'pending',
+      created_at: new Date().toISOString()
+    };
+
+    try {
+      await state.client.insert('security_requests', request);
+      toast('تم إرسال طلب تعديل البيانات للمالك', 'success');
+      form.reset();
+      closeDataChangeRequestModal();
       await refreshAll();
     } catch (error) {
       toast(error.message, 'error');
@@ -1938,6 +2215,7 @@
   }
 
   async function deleteEmployee(id) {
+    if (!isSuperAdmin()) return toast('الإجراء ده للمالك فقط', 'error');
     if (!confirm('متأكد من حذف الموظف؟')) return;
     try {
       await state.client.remove('employees', [`id=eq.${id}`]);
@@ -1948,9 +2226,27 @@
     }
   }
 
+  async function toggleEmployeeStatus(id) {
+    if (!isSuperAdmin()) return toast('الإجراء ده للمالك فقط', 'error');
+    const employee = state.data.employees.find((row) => String(row.id) === String(id));
+    if (!employee || employee.role === 'super_admin') return;
+    try {
+      await state.client.update('employees', { is_active: employee.is_active === false }, [`id=eq.${id}`]);
+      toast(employee.is_active === false ? 'تم تنشيط الحساب' : 'تم إيقاف الحساب', 'success');
+      await refreshAll();
+    } catch (error) {
+      toast(error.message, 'error');
+    }
+  }
+
   function startEditProduct(id) {
     state.ui.editingProductId = id;
     renderProducts();
+  }
+
+  function startEditOrder(id) {
+    state.ui.editingOrderId = id;
+    renderOrders();
   }
 
   function startEditEmployee(id) {
@@ -2015,3 +2311,5 @@
     }
   });
 })();
+
+
