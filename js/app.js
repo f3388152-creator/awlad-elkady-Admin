@@ -127,7 +127,7 @@
       await refreshAll();
     } else {
       showAuth();
-      setConnectionStatus(state.client ? 'جاهز' : 'مفيش اتصال بقاعدة البيانات');
+      setConnectionStatus(state.client ? 'متصل' : 'غير متصل', state.client ? 'success' : 'danger');
     }
   }
 
@@ -572,7 +572,7 @@
 
   async function refreshAll() {
     if (!state.client) {
-      setConnectionStatus('مفيش اتصال', 'danger');
+      setConnectionStatus('غير متصل', 'danger');
       return;
     }
 
@@ -868,10 +868,10 @@
     refs.dashboardRoot.innerHTML = `
       <div class="stack">
         <div class="grid stats">
-          ${statCard('المبيعات', formatCurrency(sales), `${state.data.orders.length} أوردر`, 'الرقم الحقيقي من جدول orders')}
-          ${statCard('الأوردرات الجديدة', nf.format(newOrders), 'آخر 24 ساعة', 'تتحدث من created_at')}
-          ${statCard('المصروفات', formatCurrency(expenses), `${state.data.operating_expenses.length} بند`, 'من operating_expenses')}
-          ${statCard('صافي الربح', formatCurrency(profit), `مرتجعات: ${formatCurrency(returnsValue)}`, 'بعد خصم المرتجعات والمصروفات')}
+          ${statCard('المبيعات', formatCurrency(sales), `${state.data.orders.length} أوردر`, 'إجمالي الحركة الحالية')}
+          ${statCard('الأوردرات الجديدة', nf.format(newOrders), 'آخر 24 ساعة', 'متابعة يومية سريعة')}
+          ${statCard('المصروفات', formatCurrency(expenses), `${state.data.operating_expenses.length} بند`, 'إجمالي التشغيل')}
+          ${statCard('صافي الربح', formatCurrency(profit), `مرتجعات: ${formatCurrency(returnsValue)}`, 'بعد الخصومات التشغيلية')}
         </div>
 
         <div class="grid two">
@@ -1297,9 +1297,9 @@
             </div>
           </div>
           <div class="grid three">
-            ${statCard('إجمالي المصروفات', formatCurrency(state.data.operating_expenses.reduce((sum, row) => sum + toNumber(row.amount), 0)), `${state.data.operating_expenses.length} بند`, 'من operating_expenses')}
-            ${statCard('قيمة المرتجعات', formatCurrency(state.data.returns.reduce((sum, row) => sum + toNumber(row.amount), 0)), `${state.data.returns.length} عملية`, 'من returns')}
-            ${statCard('المبيعات الصافية', formatCurrency(state.data.orders.reduce((sum, row) => sum + toNumber(row.total_amount || row.subtotal + row.shipping_fee), 0)), `${state.data.orders.length} أوردر`, 'قبل الخصم النهائي')}
+            ${statCard('إجمالي المصروفات', formatCurrency(state.data.operating_expenses.reduce((sum, row) => sum + toNumber(row.amount), 0)), `${state.data.operating_expenses.length} بند`, 'متابعة تشغيلية')}
+            ${statCard('قيمة المرتجعات', formatCurrency(state.data.returns.reduce((sum, row) => sum + toNumber(row.amount), 0)), `${state.data.returns.length} عملية`, 'قيمة الاسترجاعات')}
+            ${statCard('المبيعات الصافية', formatCurrency(state.data.orders.reduce((sum, row) => sum + toNumber(row.total_amount || row.subtotal + row.shipping_fee), 0)), `${state.data.orders.length} أوردر`, 'بعد الخصم النهائي')}
           </div>
         </article>
 
