@@ -63,6 +63,7 @@
       sidebarOpen: false,
       authMode: 'manager',
       pinVisible: false,
+      heroImagePreviewUrl: '',
       editingProductId: null,
       editingEmployeeId: null,
       filters: {
@@ -365,6 +366,49 @@
     const el = event.target;
     if (el && el.matches && el.matches('[data-permission]')) {
       return;
+    }
+
+    if (el && el.matches && el.matches('select[name="role"]')) {
+      syncEmployeePasswordVisibility(el);
+      return;
+    }
+
+    if (el instanceof HTMLInputElement && el.type === 'file' && el.name === 'hero_image_file') {
+      const file = el.files && el.files[0] ? el.files[0] : null;
+      const preview = document.querySelector('[data-hero-image-preview]');
+      const fileName = document.querySelector('[data-hero-file-name]');
+
+      if (state.ui.heroImagePreviewUrl && state.ui.heroImagePreviewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(state.ui.heroImagePreviewUrl);
+      }
+
+      state.ui.heroImagePreviewUrl = file ? URL.createObjectURL(file) : '';
+
+      if (fileName) {
+        fileName.textContent = file ? file.name : 'لم يتم اختيار صورة بعد';
+      }
+
+      if (preview) {
+        preview.innerHTML = state.ui.heroImagePreviewUrl
+          ? `<img class="preview-image" src="${state.ui.heroImagePreviewUrl}" alt="Hero preview">`
+          : '<div class="empty-state">اختر صورة الهيرو عشان تظهر المعاينة هنا.</div>';
+      }
+      return;
+    }
+  }
+
+  function syncEmployeePasswordVisibility(roleSelect) {
+    const root = refs.employeesRoot || document;
+    const select = roleSelect || root.querySelector('select[name="role"]');
+    const wrapper = root.querySelector('[data-employee-password-wrap]');
+    const input = root.querySelector('input[name="password"]');
+    if (!select || !wrapper || !input) return;
+
+    const isEmployee = String(select.value || '').toLowerCase() === 'employee';
+    wrapper.classList.toggle('hidden', isEmployee);
+    input.required = !isEmployee;
+    if (isEmployee) {
+      input.value = '';
     }
   }
 
@@ -1343,6 +1387,7 @@
 
   function renderCms() {
     const settings = state.data.site_settings[0] || {};
+    const heroPreviewUrl = state.ui.heroImagePreviewUrl || settings.hero_image_url || '';
 
     refs.cmsRoot.innerHTML = `
       <div class="stack">
@@ -1366,10 +1411,25 @@
                 <input name="hero_subtitle" value="${escapeHtml(settings.hero_subtitle || '')}">
               </label>
             </div>
-            <label class="field">
+            <div class="field">
               <span>صورة الهيرو</span>
-              <input name="hero_image_url" value="${escapeHtml(settings.hero_image_url || '')}">
-            </label>
+              <div class="hero-upload-wrap">
+                <input
+                  class="hero-upload-input"
+                  id="heroImageInput"
+                  type="file"
+                  name="hero_image_file"
+                  accept="image/*"
+                >
+                <label class="hero-upload-btn" for="heroImageInput">اختر صورة الهيرو 📸</label>
+                <span class="hero-upload-name" data-hero-file-name>${heroPreviewUrl ? 'صورة جاهزة للمعاينة' : 'لم يتم اختيار صورة بعد'}</span>
+              </div>
+            </div>
+            <div class="hero-image-preview" data-hero-image-preview>
+              ${heroPreviewUrl
+                ? `<img class="preview-image" src="${escapeHtml(heroPreviewUrl)}" alt="معاينة صورة الهيرو">`
+                : '<div class="empty-state">اختر صورة الهيرو عشان تظهر المعاينة هنا.</div>'}
+            </div>
             <div class="field-grid cols-2">
               <label class="field">
                 <span>رقم التواصل</span>
@@ -1401,7 +1461,7 @@
               </div>
             </div>
             <div>
-              ${settings.hero_image_url ? `<img class="preview-image" src="${escapeHtml(settings.hero_image_url)}" alt="Hero">` : '<div class="empty-state">الصورة هتظهر هنا بعد الحفظ.</div>'}
+              ${heroPreviewUrl ? `<img class="preview-image" src="${escapeHtml(heroPreviewUrl)}" alt="Hero">` : '<div class="empty-state">الصورة هتظهر هنا بعد الحفظ.</div>'}
             </div>
           </div>
         </article>
@@ -1439,10 +1499,10 @@
                 <span>الدور</span>
                 <select name="role">
                   <option value="employee" ${editing?.role === 'employee' ? 'selected' : ''}>موظف</option>
-                  <option value="manager" ${editing?.role === 'manager' ? 'selected' : ''}>مدير</option>
+                  <option value="manager" ${!editing || editing?.role === 'manager' ? 'selected' : ''}>مدير</option>
                 </select>
               </label>
-              <label class="field">
+              <label class="field ${editing?.role === 'employee' ? 'hidden' : ''}" data-employee-password-wrap>
                 <span>كلمة السر</span>
                 <input name="password" type="password" placeholder="${editing ? 'اتركها فارغة لو مش هتغيرها' : 'اكتب كلمة السر'}">
               </label>
@@ -1473,6 +1533,8 @@
         </article>
       </div>
     `;
+
+    syncEmployeePasswordVisibility(refs.employeesRoot.querySelector('select[name="role"]'));
   }
 
   function renderEmployeesTable(rows) {
@@ -1758,21 +1820,33 @@
   async function handleCmsSave(form) {
     if (!state.client) return;
     const data = new FormData(form);
+    const current = state.data.site_settings[0] || null;
+    const file = form.querySelector('input[name="hero_image_file"]')?.files?.[0] || null;
+    let hero_image_url = current?.hero_image_url || '';
+
+    if (file) {
+      const uploaded = await state.client.uploadFile(file, 'site');
+      hero_image_url = uploaded.publicUrl;
+    }
+
     const payload = {
       hero_title: data.get('hero_title')?.toString().trim() || '',
       hero_subtitle: data.get('hero_subtitle')?.toString().trim() || '',
-      hero_image_url: data.get('hero_image_url')?.toString().trim() || '',
+      hero_image_url,
       contact_phone: data.get('contact_phone')?.toString().trim() || '',
       contact_whatsapp: data.get('contact_whatsapp')?.toString().trim() || ''
     };
 
     try {
-      const current = state.data.site_settings[0] || null;
       if (current?.id) {
         await state.client.update('site_settings', payload, [`id=eq.${current.id}`]);
       } else {
         await state.client.insert('site_settings', payload);
       }
+      if (state.ui.heroImagePreviewUrl && state.ui.heroImagePreviewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(state.ui.heroImagePreviewUrl);
+      }
+      state.ui.heroImagePreviewUrl = '';
       toast('تم حفظ المحتوى', 'success');
       await refreshAll();
     } catch (error) {
