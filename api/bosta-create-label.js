@@ -131,20 +131,32 @@ module.exports = async (req, res) => {
     const shippingFee = Number(rate.fee || payload.shippingFee || 0);
     const codAmount = Number(payload.totalAmount ?? lineTotal + shippingFee);
 
-    const bostaUrl = process.env.BOSTA_CREATE_LABEL_URL || 'https://api.bosta.co/shipments';
+    const bostaUrl = process.env.BOSTA_CREATE_LABEL_URL || 'https://api.bosta.co/api/v2/deliveries';
     const bostaApiKey = process.env.BOSTA_API_KEY || '';
 
     const bostaBody = {
-      orderNumber: payload.orderNumber || order.orderNumber || order.id || `AWLAD-${Date.now()}`,
-      customer,
-      shippingSize: rate.weight,
-      codAmount,
-      lineTotal,
-      shippingFee,
-      order
+      type: 'SEND',
+      businessReference: payload.orderNumber || order.orderNumber || order.id || `AWLAD-${Date.now()}`,
+      receiver: {
+        firstName: customer.name || 'عميل',
+        phone: customer.phone || '',
+        secondPhone: customer.altPhone || '',
+        address: customer.address || '',
+        city: customer.governorate || payload.governorate || order.governorate || ''
+      },
+      cod: codAmount,
+      notes: customer.notes || '',
+      items: [{
+        name: order.productTitle || 'طلب أولاد القاضي',
+        quantity: Number(order.quantity || 1),
+        price: lineTotal
+      }]
     };
 
     let bostaResponse = null;
+    if (!bostaApiKey) {
+      return sendJson(res, 503, { ok: false, error: 'Bosta API key is not configured' });
+    }
     if (bostaApiKey) {
       const response = await fetch(bostaUrl, {
         method: 'POST',

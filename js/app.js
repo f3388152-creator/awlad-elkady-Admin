@@ -58,6 +58,7 @@
       products: [],
       orders: [],
       employees: [],
+      categories: [],
       site_settings: [],
       security_requests: [],
       tracking_events: [],
@@ -307,6 +308,8 @@
   }
 
   function canAccess(section) {
+    if (section === 'cms' && !['super_admin', 'manager'].includes(state.session?.role)) return false;
+    if (section === 'employees' && !isSuperAdmin()) return false;
     if (isSuperAdmin()) return true;
     const role = state.session?.role || 'employee';
     const map = PERMISSIONS[role] || PERMISSIONS.employee;
@@ -726,6 +729,7 @@
         safeSelect('products'),
         safeSelect('orders'),
         safeSelect('employees'),
+        safeSelect('categories'),
         safeSelect('site_settings'),
         safeSelect('security_requests'),
         safeSelect('tracking_events'),
@@ -737,6 +741,7 @@
       state.data.products = normalizeProducts(products);
       state.data.orders = normalizeOrders(orders);
       state.data.employees = normalizeEmployees(employees);
+      state.data.categories = Array.isArray(categories) ? categories : [];
       state.data.site_settings = Array.isArray(siteSettings) ? siteSettings : [];
       state.data.security_requests = normalizeSecurityRequests(securityRequests);
       state.data.tracking_events = normalizeTrackingEvents(trackingEvents);
@@ -1173,6 +1178,9 @@
   }
 
   function renderProducts() {
+    const categoryOptions = state.data.categories.length
+      ? state.data.categories
+      : PRODUCT_CATEGORY_OPTIONS;
     const editing = state.data.products.find((row) => String(row.id) === String(state.ui.editingProductId)) || null;
     const productTable = renderProductsTable(filterByQuery(state.data.products, state.ui.filters.products, ['title', 'description', 'bosta_weight', 'category']));
 
@@ -1218,7 +1226,7 @@
               <label class="field">
                 <span>القسم</span>
                 <select name="category" required>
-                  ${PRODUCT_CATEGORY_OPTIONS.map((option) => `<option value="${option.value}" ${normalizeCategory(editing?.category || '') === option.value ? 'selected' : ''}>${option.label}</option>`).join('')}
+                  ${categoryOptions.map((option) => `<option value="${escapeHtml(option.slug || option.value)}" ${normalizeCategory(editing?.category || '') === normalizeCategory(option.slug || option.value) ? 'selected' : ''}>${escapeHtml(option.name || option.label)}</option>`).join('')}
                 </select>
               </label>
               <label class="checkbox-pill" style="align-self:end">
