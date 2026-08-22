@@ -292,12 +292,13 @@
   }
 
   function applyRoleVisibility() {
-    const isOwner = isSuperAdmin();
-    document.querySelectorAll('.owner-only, [data-section="employees"], [data-panel="employees"]').forEach((el) => {
-      el.classList.toggle('hidden', !isOwner);
+    const canManageSettings = ['super_admin', 'manager'].includes(state.session?.role);
+    const canManageEmployees = isSuperAdmin();
+    document.querySelectorAll('[data-section="cms"], [data-panel="cms"]').forEach((el) => {
+      el.classList.toggle('hidden', !canManageSettings);
     });
-    document.querySelectorAll('.owner-only-panel').forEach((el) => {
-      el.classList.toggle('hidden', !isOwner);
+    document.querySelectorAll('.owner-only, [data-section="employees"], [data-panel="employees"], .owner-only-panel').forEach((el) => {
+      el.classList.toggle('hidden', !canManageEmployees);
     });
   }
 
@@ -1578,6 +1579,10 @@
   }
 
   function renderCms() {
+    if (!['super_admin', 'manager'].includes(state.session?.role)) {
+      refs.cmsRoot.innerHTML = '<div class="empty-state">القسم ده للمالك والمدير فقط.</div>';
+      return;
+    }
     const settings = state.data.site_settings[0] || {};
     const heroPreviewUrl = state.ui.heroImagePreviewUrl || settings.hero_image_url || '';
 
@@ -1632,7 +1637,12 @@
                 <input name="contact_whatsapp" value="${escapeHtml(settings.contact_whatsapp || '')}">
               </label>
             </div>
-            <button class="primary-btn" type="submit">حفظ المحتوى</button>
+            <div class="field-grid cols-2">
+              <label class="field"><span>رابط اللوجو</span><input name="logo_url" type="url" value="${escapeHtml(settings.logo_url || '')}"></label>
+              <label class="field"><span>العنوان</span><input name="address" value="${escapeHtml(settings.address || '')}"></label>
+            </div>
+            <label class="field"><span>وصف المتجر</span><textarea name="footer_description" rows="3">${escapeHtml(settings.footer_description || '')}</textarea></label>
+            <button class="primary-btn" type="submit">حفظ إعدادات الموقع</button>
           </form>
         </article>
 
@@ -2071,6 +2081,10 @@
   }
 
   async function handleCmsSave(form) {
+    if (!['super_admin', 'manager'].includes(state.session?.role)) {
+      toast('إعدادات الموقع متاحة للمالك والمدير فقط', 'error');
+      return;
+    }
     if (!state.client) return;
     const data = new FormData(form);
     const current = state.data.site_settings[0] || null;
@@ -2087,7 +2101,10 @@
       hero_subtitle: data.get('hero_subtitle')?.toString().trim() || '',
       hero_image_url,
       contact_phone: data.get('contact_phone')?.toString().trim() || '',
-      contact_whatsapp: data.get('contact_whatsapp')?.toString().trim() || ''
+      contact_whatsapp: data.get('contact_whatsapp')?.toString().trim() || '',
+      logo_url: data.get('logo_url')?.toString().trim() || '',
+      address: data.get('address')?.toString().trim() || '',
+      footer_description: data.get('footer_description')?.toString().trim() || ''
     };
 
     try {
