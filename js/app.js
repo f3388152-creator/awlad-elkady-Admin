@@ -342,6 +342,10 @@
         setSidebar(false);
       } else if (actionName === 'delete-category') {
         deleteCategory(id);
+      } else if (actionName === 'edit-category') {
+        editCategory(id);
+      } else if (actionName === 'cancel-category-edit') {
+        renderProducts();
       } else if (actionName === 'edit-product') {
         startEditProduct(id);
       } else if (actionName === 'edit-order') {
@@ -732,7 +736,7 @@
       state.ui.loading = true;
       setConnectionStatus('جارٍ المزامنة');
 
-      const [products, orders, employees, siteSettings, securityRequests, trackingEvents, returns, expenses, shippingRates] = await Promise.all([
+      const [products, orders, employees, categories, siteSettings, securityRequests, trackingEvents, returns, expenses, shippingRates] = await Promise.all([
         safeSelect('products'),
         safeSelect('orders'),
         safeSelect('employees'),
@@ -1186,7 +1190,7 @@
 
   function renderCategoryManager() {
     const rows = state.data.categories || [];
-    return `<article class="card"><div class="section-toolbar"><div><p class="eyebrow">Categories</p><h3>إدارة الأقسام</h3></div></div><form id="categoryForm" class="section-form"><input type="hidden" name="id"><div class="field-grid cols-2"><label class="field"><span>اسم القسم</span><input name="name" required></label><label class="field"><span>الرابط المختصر</span><input name="slug" required pattern="[a-z0-9-]+"></label></div><button class="primary-btn" type="submit">إضافة القسم</button></form><div class="stack">${rows.map((row) => `<div class="chip" style="justify-content:space-between"><strong>${escapeHtml(row.name)}</strong><span>${escapeHtml(row.slug)}</span><button class="mini-btn danger" type="button" data-action="delete-category" data-id="${escapeHtml(row.id)}">حذف</button></div>`).join('')}</div></article>`;
+    return `<article class="card"><div class="section-toolbar"><div><p class="eyebrow">Categories</p><h3>إدارة الأقسام</h3></div></div><form id="categoryForm" class="section-form"><input type="hidden" name="id"><div class="field-grid cols-2"><label class="field"><span>اسم القسم</span><input name="name" required></label><label class="field"><span>الرابط المختصر</span><input name="slug" required pattern="[a-z0-9-]+"></label></div><div class="toolbar-actions"><button class="primary-btn" type="submit">حفظ القسم</button><button class="ghost-btn" type="button" data-action="cancel-category-edit">إلغاء</button></div></form><div class="stack">${rows.map((row) => `<div class="chip" style="justify-content:space-between"><strong>${escapeHtml(row.name)}</strong><span>${escapeHtml(row.slug)}</span><span class="row-actions"><button class="mini-btn primary" type="button" data-action="edit-category" data-id="${escapeHtml(row.id)}">تعديل</button><button class="mini-btn danger" type="button" data-action="delete-category" data-id="${escapeHtml(row.id)}">حذف</button></span></div>`).join('')}</div></article>`;
   }
 
   function renderProducts() {
@@ -1912,14 +1916,27 @@
     return Array.isArray(state.data.security_requests) ? state.data.security_requests : [];
   }
 
+  function editCategory(id) {
+    if (!canAccess('products')) return;
+    const row = state.data.categories.find((item) => String(item.id) === String(id));
+    const form = document.getElementById('categoryForm');
+    if (!row || !form) return;
+    form.elements.id.value = row.id;
+    form.elements.name.value = row.name || '';
+    form.elements.slug.value = row.slug || '';
+    form.elements.name.focus();
+  }
+
   async function handleCategorySave(form) {
     if (!state.client || !canAccess('products')) return;
     const data = new FormData(form);
+    const id = data.get('id')?.toString().trim();
     const name = data.get('name')?.toString().trim();
     const slug = data.get('slug')?.toString().trim().toLowerCase();
     if (!name || !slug) return toast('اكتب اسم القسم والرابط المختصر', 'error');
     try {
-      await state.client.insert('categories', { name, slug, is_visible: true });
+      if (id) await state.client.update('categories', { name, slug }, [`id=eq.${id}`]);
+      else await state.client.insert('categories', { name, slug, is_visible: true });
       toast('تمت إضافة القسم', 'success');
       form.reset();
       await refreshAll();
