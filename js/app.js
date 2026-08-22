@@ -340,6 +340,8 @@
         setSidebar(true);
       } else if (actionName === 'close-sidebar') {
         setSidebar(false);
+      } else if (actionName === 'delete-category') {
+        deleteCategory(id);
       } else if (actionName === 'edit-product') {
         startEditProduct(id);
       } else if (actionName === 'edit-order') {
@@ -512,6 +514,11 @@
       return;
     }
 
+    if (formId === 'categoryForm') {
+      event.preventDefault();
+      await handleCategorySave(form);
+      return;
+    }
     if (formId === 'productForm') {
       event.preventDefault();
       await handleProductSave(form);
@@ -1177,6 +1184,11 @@
     `;
   }
 
+  function renderCategoryManager() {
+    const rows = state.data.categories || [];
+    return `<article class="card"><div class="section-toolbar"><div><p class="eyebrow">Categories</p><h3>إدارة الأقسام</h3></div></div><form id="categoryForm" class="section-form"><input type="hidden" name="id"><div class="field-grid cols-2"><label class="field"><span>اسم القسم</span><input name="name" required></label><label class="field"><span>الرابط المختصر</span><input name="slug" required pattern="[a-z0-9-]+"></label></div><button class="primary-btn" type="submit">إضافة القسم</button></form><div class="stack">${rows.map((row) => `<div class="chip" style="justify-content:space-between"><strong>${escapeHtml(row.name)}</strong><span>${escapeHtml(row.slug)}</span><button class="mini-btn danger" type="button" data-action="delete-category" data-id="${escapeHtml(row.id)}">حذف</button></div>`).join('')}</div></article>`;
+  }
+
   function renderProducts() {
     const categoryOptions = state.data.categories.length
       ? state.data.categories
@@ -1186,6 +1198,7 @@
 
     refs.productsRoot.innerHTML = `
       <div class="stack">
+        ${canAccess('products') ? renderCategoryManager() : ''}
         <article class="card">
           <div class="section-toolbar">
             <div>
@@ -1897,6 +1910,33 @@
 
   function readSecurityRequests() {
     return Array.isArray(state.data.security_requests) ? state.data.security_requests : [];
+  }
+
+  async function handleCategorySave(form) {
+    if (!state.client || !canAccess('products')) return;
+    const data = new FormData(form);
+    const name = data.get('name')?.toString().trim();
+    const slug = data.get('slug')?.toString().trim().toLowerCase();
+    if (!name || !slug) return toast('اكتب اسم القسم والرابط المختصر', 'error');
+    try {
+      await state.client.insert('categories', { name, slug, is_visible: true });
+      toast('تمت إضافة القسم', 'success');
+      form.reset();
+      await refreshAll();
+    } catch (error) {
+      toast(error.message, 'error');
+    }
+  }
+
+  async function deleteCategory(id) {
+    if (!state.client || !canAccess('products') || !confirm('متأكد من حذف القسم؟')) return;
+    try {
+      await state.client.remove('categories', [`id=eq.${id}`]);
+      toast('تم حذف القسم', 'success');
+      await refreshAll();
+    } catch (error) {
+      toast(error.message, 'error');
+    }
   }
 
   async function handleProductSave(form) {
