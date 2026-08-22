@@ -137,12 +137,23 @@ module.exports = async (req, res) => {
     const bostaBody = {
       type: 'SEND',
       businessReference: payload.orderNumber || order.orderNumber || order.id || `AWLAD-${Date.now()}`,
-      receiver: {
+      pickupAddress: {
+        firstName: process.env.BOSTA_PICKUP_FIRST_NAME || 'أولاد القاضي',
+        phone: process.env.BOSTA_PICKUP_PHONE || '',
+        address: process.env.BOSTA_PICKUP_ADDRESS || '',
+        city: process.env.BOSTA_PICKUP_CITY || 'القاهرة'
+      },
+      dropOffAddress: {
         firstName: customer.name || 'عميل',
         phone: customer.phone || '',
         secondPhone: customer.altPhone || '',
         address: customer.address || '',
         city: customer.governorate || payload.governorate || order.governorate || ''
+      },
+      receiver: {
+        firstName: customer.name || 'عميل',
+        phone: customer.phone || '',
+        secondPhone: customer.altPhone || ''
       },
       cod: codAmount,
       notes: customer.notes || '',
@@ -176,6 +187,7 @@ module.exports = async (req, res) => {
       }
 
       if (!response.ok) {
+        console.error('Bosta API error response:', { status: response.status, statusText: response.statusText, body: bostaResponse });
         return sendJson(res, response.status, {
           ok: false,
           error: 'Bosta API request failed',
