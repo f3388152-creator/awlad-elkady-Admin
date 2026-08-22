@@ -1,4 +1,4 @@
-﻿const { selectRows, insertRows } = require('./_supabase');
+const { selectRows, insertRows } = require('./_supabase');
 
 function sendJson(res, status, payload) {
   res.status(status).json(payload);
@@ -161,6 +161,7 @@ module.exports = async (req, res) => {
       const response = await fetch(bostaUrl, {
         method: 'POST',
         headers: {
+          'X-API-KEY': bostaApiKey,
           Authorization: `Bearer ${bostaApiKey}`,
           'Content-Type': 'application/json'
         },
