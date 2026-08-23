@@ -1,125 +1,581 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="color-scheme" content="light">
-  <title>لوحة الإدارة | أولاد القاضي</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./css/admin.css">
-  <script>
-    window.ADMIN_BOOTSTRAP = {
-      apiBase: '/api',
-      storageBucket: 'admin-media',
-      appName: 'أولاد القاضي | لوحة الإدارة'
-    };
-  </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة التحكم - أولاد القاضي</title>
+    <!-- Cairo Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- SheetJS for Bosta Excel Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link rel="stylesheet" href="assets/css/admin.css">
 </head>
 <body>
-  <div class="bg-blobs" aria-hidden="true">
-    <span></span><span></span><span></span>
-  </div>
 
-  <main class="auth-screen hidden" id="authScreen" aria-hidden="true">
-    <section class="auth-card glass-card" aria-label="الإدارة">
-      <div class="brand-lockup">
-        <div class="brand-mark">أ</div>
-      </div>
-    </section>
-  </main>
-
-  <div class="app-shell hidden" id="appShell">
-    <aside class="sidebar" id="sidebar">
-      <div class="sidebar-top">
-        <div class="brand-lockup compact">
-          <div class="brand-mark">أ</div>
-          <div>
-            <p class="eyebrow">Awlad El Kady</p>
-            <h2>لوحة الإدارة</h2>
-          </div>
+    <!-- Single PIN / Password Authentication Screen -->
+    <div id="login-screen" class="login-screen">
+        <div class="login-card glass-panel">
+            <div class="logo-wrapper">
+                <img src="../assets/images/logo.png" alt="أولاد القاضي" class="login-logo" onerror="this.outerHTML='<div class=\'fallback-logo\'><i class=\'fa-solid fa-crown text-primary\'></i><span>أولاد القاضي</span></div>'">
+            </div>
+            <h2 class="login-title">بوابة الإدارة المركزية</h2>
+            <p class="login-subtitle">أدخل كلمة المرور / رمز PIN للوصول للنظام</p>
+            
+            <form id="login-form">
+                <div class="form-group mb-4">
+                    <div class="input-icon-wrapper">
+                        <i class="fa-solid fa-lock input-icon"></i>
+                        <input type="password" id="password-only" class="form-control text-center" placeholder="أدخل الـ PIN (مثال: 500900)" autocomplete="off" autofocus required>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block"><i class="fa-solid fa-right-to-bracket"></i> دخول اللوحة</button>
+                <div id="login-error" class="error-text"></div>
+            </form>
         </div>
-        <button class="icon-btn mobile-close" id="closeSidebarBtn" type="button">×</button>
-      </div>
-
-      <nav class="sidebar-nav" id="sidebarNav">
-        <button class="nav-item active" data-section="dashboard" type="button">الداشبورد</button>
-        <button class="nav-item" data-section="products" type="button">المنتجات وإدارة الأقسام</button>
-        <button class="nav-item" data-section="orders" type="button">الأوردرات</button>
-        <button class="nav-item" data-section="finance" type="button">الماليات</button>
-        <button class="nav-item" data-section="cms" type="button">إعدادات الموقع</button>
-      </nav>
-
-      <div class="sidebar-card">
-        <p class="label">مستوى الدخول</p>
-        <div class="role-chip" id="roleChip">غير مسجل</div>
-        <p class="muted small" id="sessionText">سجل دخولك عشان تبدأ.</p>
-      </div>
-    </aside>
-
-    <div class="app-backdrop" id="appBackdrop"></div>
-
-    <section class="content">
-      <header class="topbar">
-        <div class="topbar-left">
-          <button class="icon-btn mobile-open" id="openSidebarBtn" type="button">☰</button>
-          <div>
-            <p class="eyebrow" id="sectionEyebrow">Dashboard</p>
-            <h2 id="sectionTitle">الداشبورد</h2>
-          </div>
-        </div>
-        <div class="topbar-actions">
-          <span class="status-pill" id="connectionStatus">جارٍ التحضير</span>
-          <button class="ghost-btn" id="syncBtn" type="button">مزامنة</button>
-          <button class="ghost-btn danger" id="logoutBtn" type="button">خروج</button>
-        </div>
-      </header>
-
-      <div class="page-shell">
-        <section class="page-panel active" data-panel="dashboard">
-          <div id="dashboardRoot"></div>
-        </section>
-
-        <section class="page-panel" data-panel="products">
-          <div id="productsRoot"></div>
-        </section>
-
-        <section class="page-panel" data-panel="orders">
-          <div id="ordersRoot"></div>
-        </section>
-
-        <section class="page-panel" data-panel="finance">
-          <div id="financeRoot"></div>
-        </section>
-
-        <section class="page-panel" data-panel="cms">
-          <div id="cmsRoot"></div>
-        </section>
-
-      </div>
-    </section>
-  </div>
-
-  <div class="modal hidden" id="pinModal" aria-hidden="true">
-    <div class="modal-card glass-card">
-      <button class="icon-btn close-modal" id="closePinModalBtn" type="button">×</button>
-      <p class="eyebrow">إدارة خاصة</p>
-      <h3>أدخل الـ PIN السري</h3>
-      <p class="muted">اكتب الـ PIN لفتح لوحة الإدارة.</p>
-      <form id="pinForm" class="modal-form">
-        <input type="password" id="pinInput" placeholder="••••••" maxlength="6" inputmode="numeric" required>
-        <button class="primary-btn" type="submit">فتح الصلاحيات</button>
-      </form>
     </div>
-  </div>
 
-  <div class="toast-stack" id="toastStack"></div>
+    <!-- Main Admin Dashboard -->
+    <div id="dashboard" class="dashboard hidden">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar glass-panel">
+            <div class="sidebar-brand">
+                <img src="../assets/images/logo.png" alt="أولاد القاضي" class="brand-logo" onerror="this.outerHTML='<h3 class=\'brand-text\'>أولاد القاضي</h3>'">
+            </div>
+            
+                <button class="nav-item active" data-target="orders">
+                    <i class="fa-solid fa-boxes-stacked"></i> <span>إدارة الطلبات</span>
+                </button>
+                <button class="nav-item" data-target="products">
+                    <i class="fa-solid fa-box-open"></i> <span>المنتجات</span>
+                </button>
+                <button class="nav-item" data-target="categories">
+                    <i class="fa-solid fa-folder-tree"></i> <span>الأقسام</span>
+                </button>
+                <button class="nav-item" data-target="complaints">
+                    <i class="fa-solid fa-headset"></i> <span>الشكاوى</span>
+                </button>
+                <button class="nav-item" data-target="settings">
+                    <i class="fa-solid fa-gears"></i> <span>الإعدادات</span>
+                </button>
+            </nav>
 
-  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <script src="./js/config.js"></script>
-  <script src="./js/api.js"></script>
-  <script src="./js/app.js"></script>
+            <div class="sidebar-bottom">
+                <button id="logout-btn" class="btn btn-danger-ghost btn-block">
+                    <i class="fa-solid fa-power-off"></i> <span>تسجيل الخروج</span>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Workspace Area -->
+        <main class="main-workspace">
+            <!-- Header Bar -->
+            <header class="top-bar glass-panel">
+                <div class="flex-align gap-3">
+                    <button id="mobile-menu-btn" class="icon-btn mobile-only">
+                        <i class="fa-solid fa-bars-staggered"></i>
+                    </button>
+                    <h1 id="page-title" class="page-title">إدارة الطلبات</h1>
+                </div>
+                <div class="top-bar-right flex-align gap-3">
+                    <div class="date-badge" id="current-date"></div>
+                </div>
+            </header>
+
+            <!-- Views Container -->
+            <div class="views-wrapper custom-scroll">
+                
+                <!-- SECTION 1: ORDERS & BOSTA EXPORT -->
+                <section id="view-orders" class="view-pane active">
+                    <div class="control-bar glass-panel mb-4">
+                        <div class="flex-align gap-2">
+                            <!-- ONLY Export Bosta Excel Button as requested -->
+                            <button class="btn btn-emerald" id="export-bosta-btn">
+                                <i class="fa-solid fa-file-excel"></i> تصدير لملف Bosta Excel
+                            </button>
+                            <button class="btn btn-ghost active-filter" id="filter-all-orders">الكل</button>
+                            <button class="btn btn-ghost" id="filter-new-orders">الجديدة فقط</button>
+                        </div>
+                        <div class="search-input-wrapper">
+                            <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                            <input type="text" id="search-orders-input" placeholder="ابحث برقم الطلب، العميل، الهاتف، المحافظة...">
+                        </div>
+                    </div>
+
+                    <!-- Orders Grid Container -->
+                    <div id="orders-cards-container" class="orders-grid-container">
+                        <!-- Dynamic Order Cards Rendered via JS -->
+                    </div>
+                </section>
+
+                <!-- SECTION 2: PRODUCTS CRUD -->
+                <section id="view-products" class="view-pane">
+                    <div id="subtab-products-list" class="subtab-content active">
+                        <div class="control-bar glass-panel mb-4">
+                            <button class="btn btn-primary" id="open-add-product-modal">
+                                <i class="fa-solid fa-plus"></i> إضافة منتج جديد
+                            </button>
+                            <div class="search-input-wrapper">
+                                <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                                <input type="text" id="search-products-input" placeholder="بحث باسم المنتج، الـ SKU، أو القسم...">
+                            </div>
+                        </div>
+
+                        <div class="products-grid" id="products-cards-container">
+                            <!-- Dynamic Product Cards Rendered via JS -->
+                        </div>
+                    </div>
+                </section>
+
+                <!-- SECTION 2B: CATEGORIES CRUD -->
+                <section id="view-categories" class="view-pane">
+                    <div id="subtab-categories-list" class="subtab-content active">
+                        <div class="control-bar glass-panel mb-4">
+                            <button class="btn btn-primary" id="open-add-category-modal">
+                                <i class="fa-solid fa-folder-plus"></i> إضافة قسم جديد
+                            </button>
+                            <span class="text-subtle text-sm">أضف، عدّل أو احذف أقسام المتجر بحرية</span>
+                        </div>
+                        <div class="categories-grid" id="categories-cards-container">
+                            <!-- Dynamic Categories Rendered via JS -->
+                        </div>
+                    </div>
+                </section>
+
+                <!-- SECTION 3: COMPLAINTS -->
+                <section id="view-complaints" class="view-pane">
+                    <div class="control-bar glass-panel mb-4">
+                        <span class="font-bold text-primary"><i class="fa-solid fa-headset"></i> صندوق شكاوى العملاء</span>
+                        <div class="flex-align gap-2">
+                            <button class="btn btn-ghost active-filter" id="filter-complaints-all">الكل</button>
+                            <button class="btn btn-ghost" id="filter-complaints-new">الجديدة (أحمر)</button>
+                            <button class="btn btn-ghost" id="filter-complaints-resolved">المحلولة (أخضر)</button>
+                        </div>
+                    </div>
+                    <div class="complaints-grid" id="complaints-cards-container">
+                        <!-- Dynamic Complaint Cards Rendered via JS -->
+                    </div>
+                </section>
+
+                <!-- SECTION 4: SITE SETTINGS -->
+                <section id="view-settings" class="view-pane">
+                    <div class="settings-container glass-panel">
+                        <!-- Settings Sidebar Sub-navigation -->
+                        <div class="settings-sidebar">
+                            <button class="settings-tab-btn active" data-tab="tab-identity">
+                                <i class="fa-solid fa-id-card"></i> 1. الهوية والـ SEO
+                            </button>
+                            <button class="settings-tab-btn" data-tab="tab-content">
+                                <i class="fa-solid fa-heading"></i> 2. محتوى الصفحة
+                            </button>
+                            <button class="settings-tab-btn" data-tab="tab-contact">
+                                <i class="fa-solid fa-share-nodes"></i> 3. روابط التواصل
+                            </button>
+                            <button class="settings-tab-btn" data-tab="tab-faq">
+                                <i class="fa-solid fa-circle-question"></i> 4. الأسئلة الشائعة
+                            </button>
+                            <button class="settings-tab-btn" data-tab="tab-shipping">
+                                <i class="fa-solid fa-truck-fast"></i> 5. الشحن المخصص
+                            </button>
+                            <button class="settings-tab-btn" data-tab="tab-maintenance">
+                                <i class="fa-solid fa-palette"></i> 6. الصيانة والألوان
+                            </button>
+                        </div>
+
+                        <!-- Settings Content Items -->
+                        <div class="settings-content custom-scroll">
+                            
+                            <!-- TAB 1: IDENTITY & SEO -->
+                            <div id="tab-identity" class="tab-content-item active">
+                                <h3 class="tab-heading"><i class="fa-solid fa-id-card text-primary"></i> الهوية البصرية والـ SEO</h3>
+                                <div class="form-grid cols-2 mb-3">
+                                    <div class="form-group">
+                                        <label>لوجو الهيدر العلوي</label>
+                                        <input type="file" accept="image/*" class="form-control" id="setting-logo-header-file">
+                                        <input type="hidden" id="setting-logo-header" value="../assets/images/logo.png">
+                                        <img id="setting-logo-header-preview" src="../assets/images/logo.png" style="max-height: 40px; margin-top: 5px;">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>لوجو الفوتر السكلي</label>
+                                        <input type="file" accept="image/*" class="form-control" id="setting-logo-footer-file">
+                                        <input type="hidden" id="setting-logo-footer" value="../assets/images/logo.png">
+                                        <img id="setting-logo-footer-preview" src="../assets/images/logo.png" style="max-height: 40px; margin-top: 5px;">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>اسم الموقع الرئيسي</label>
+                                        <input type="text" class="form-control" id="setting-site-name" value="أولاد القاضي للأجهزة المنزلية">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>العلامة التجارية (Brand Name)</label>
+                                        <input type="text" class="form-control" id="setting-brand-name" value="Awlad El-Kady Store">
+                                    </div>
+                                </div>
+                                <div class="form-group mb-4">
+                                    <label>وصف محركات البحث (SEO Meta Description)</label>
+                                    <textarea class="form-control" id="setting-seo-desc" rows="3">أفضل الأجهزة المنزلية وتجهيزات العرائس من معرض أولاد القاضي بأسعار الجملة وشحن سريع لكافة المحافظات.</textarea>
+                                </div>
+                                <button class="btn btn-primary" id="save-identity-btn"><i class="fa-solid fa-floppy-disk"></i> حفظ إعدادات الهوية</button>
+                            </div>
+
+                            <!-- TAB 2: PAGE CONTENT & MARQUEE -->
+                            <div id="tab-content" class="tab-content-item">
+                                <h3 class="tab-heading"><i class="fa-solid fa-heading text-primary"></i> محتوى الشريط الإعلاني والهيرو</h3>
+                                <div class="form-group mb-3">
+                                    <label>نص شريط الإعلانات (Marquee Text)</label>
+                                    <input type="text" class="form-control" id="setting-marquee-text" value="🔥 أقوى خصومات وتجهيزات العرائس بأسعار الجملة - شحن سريع لجميع المحافظات!">
+                                </div>
+                                <div class="form-group mb-3">
+                                    <label>سلوك شريط الإعلانات</label>
+                                    <select class="form-control" id="setting-marquee-behavior">
+                                        <option value="running">نص بيجري (متحرك)</option>
+                                        <option value="static">نص ثابت</option>
+                                        <option value="timer">مؤقت زمني (يختفي بعد تاريخ الانتهاء)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group mb-3" id="marquee-timer-group">
+                                    <label>تاريخ ووقت الانتهاء (في حالة المؤقت الزمني)</label>
+                                    <input type="datetime-local" class="form-control" id="setting-marquee-end-date">
+                                </div>
+                                <div class="form-group mb-4">
+                                    <label>عنوان الهيرو الرئيسي (Hero Main Title)</label>
+                                    <input type="text" class="form-control" id="setting-hero-title" value="قمة التميز والفخامة في منزل الأناقة">
+                                </div>
+                                <button class="btn btn-primary" id="save-content-btn"><i class="fa-solid fa-floppy-disk"></i> حفظ نصوص الواجهة</button>
+                            </div>
+
+                            <!-- TAB 3: CONTACT & SOCIAL LINKS -->
+                            <div id="tab-contact" class="tab-content-item">
+                                <div class="flex-between mb-3">
+                                    <h3 class="tab-heading mb-0"><i class="fa-solid fa-share-nodes text-primary"></i> قنوات التواصل الاجتماعي</h3>
+                                    <button class="btn btn-emerald text-sm" id="add-social-link-btn"><i class="fa-solid fa-plus"></i> إضافة قناة جديدة</button>
+                                </div>
+                                <div id="social-links-list" class="social-links-container flex-column gap-2 mb-4">
+                                    <!-- Rendered dynamically by JS -->
+                                </div>
+                                <button class="btn btn-primary" id="save-contact-btn"><i class="fa-solid fa-floppy-disk"></i> حفظ قنوات التواصل</button>
+                            </div>
+
+                            <!-- TAB 4: FAQ MANAGEMENT -->
+                            <div id="tab-faq" class="tab-content-item">
+                                <div class="flex-between mb-3">
+                                    <h3 class="tab-heading mb-0"><i class="fa-solid fa-circle-question text-primary"></i> إدارة الأسئلة الشائعة (FAQ)</h3>
+                                    <button class="btn btn-primary text-sm" id="open-add-faq-modal"><i class="fa-solid fa-plus"></i> إضافة سؤال جديد</button>
+                                </div>
+                                <div id="faq-list-container" class="faq-list-container flex-column gap-2 mb-4">
+                                    <!-- Rendered dynamically by JS -->
+                                </div>
+                            </div>
+
+                            <!-- TAB 5: CUSTOM SHIPPING SETTINGS -->
+                            <div id="tab-shipping" class="tab-content-item">
+                                <h3 class="tab-heading"><i class="fa-solid fa-truck-fast text-primary"></i> الشحن المخصص وبدائل بوسطة</h3>
+                                <div class="card-item mb-4 flex-between">
+                                    <div>
+                                        <div class="font-bold text-dark text-lg">تغليب الشحن المخصص (إيقاف حاسبة بوسطة)</div>
+                                        <div class="text-subtle text-sm mt-1">تحديد سعر موحد أو شحن مجاني لكافة المحافظات دون حساب كجم بالمعادلة</div>
+                                    </div>
+                                    <label class="switch-toggle">
+                                        <input type="checkbox" id="custom-shipping-master-toggle">
+                                        <span class="slider"></span>
+                                    </label>
+                                </div>
+
+                                <div class="custom-shipping-details hidden p-3 rounded mb-4 glass-panel">
+                                    <div class="form-group mb-3">
+                                        <label>نوع الشحن المخصص</label>
+                                        <select class="form-control" id="custom-shipping-type">
+                                            <option value="flat">سعر موحد لكل المحافظات</option>
+                                            <option value="free">شحن مجاني بالكامل (0 ج.م)</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group" id="flat-rate-group">
+                                        <label>قيمة الشحن الموحد (ج.م)</label>
+                                        <input type="number" class="form-control" id="custom-shipping-flat-rate" value="50">
+                                    </div>
+                                </div>
+                                <button class="btn btn-primary" id="save-shipping-setting-btn"><i class="fa-solid fa-floppy-disk"></i> حفظ إعدادات الشحن</button>
+                            </div>
+
+                            <!-- TAB 6: MAINTENANCE MODE -->
+                            <div id="tab-maintenance" class="tab-content-item">
+                                <h3 class="tab-heading"><i class="fa-solid fa-palette text-primary"></i> وضع الصيانة</h3>
+
+                                <!-- Maintenance Mode -->
+                                <div class="card-item border-danger mb-4">
+                                    <div class="flex-between mb-3">
+                                        <div>
+                                            <div class="font-bold text-danger text-lg">تفعيل وضع الصيانة (إغلاق الموقع للزوار)</div>
+                                            <div class="text-subtle text-sm mt-1">عند التفعيل تظهر صفحة توقف مؤقت للجمهور</div>
+                                        </div>
+                                        <label class="switch-toggle">
+                                            <input type="checkbox" id="maintenance-mode-toggle">
+                                            <span class="slider"></span>
+                                        </label>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>رسالة التوقف للزوار</label>
+                                        <textarea class="form-control" id="maintenance-message" rows="2">الموقع يخضع حالياً لأعمال التحديث وتجهيز العروض الجديدة... سنعود قريباً!</textarea>
+                                    </div>
+                                </div>
+                                <button class="btn btn-danger" id="save-maintenance-btn"><i class="fa-solid fa-shield"></i> تطبيق إعدادات الصيانة والألوان</button>
+                            </div>
+
+                        </div>
+                    </div>
+                </section>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- FLOATING ASWAN BOSTA CONTRACT SHIPPING CALCULATOR SIDEBAR -->
+    <button class="floating-calc-trigger" id="open-shipping-calc" title="حاسبة عقد أسوان المعتمة مع بوسطة">
+        <i class="fa-solid fa-calculator"></i>
+    </button>
+
+    <div id="shipping-sidebar" class="drawer-panel glass-panel">
+        <div class="drawer-header">
+            <h3><i class="fa-solid fa-truck-ramp-box text-primary"></i> حاسبة أسعار عقد بوسطة - أسوان</h3>
+            <button class="icon-btn" id="close-shipping-calc"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="drawer-body custom-scroll">
+            <div class="form-group mb-3">
+                <label>نقطة الشحن الأساسية</label>
+                <input type="text" class="form-control font-bold" value="أسوان / كوم أمبو (جنوب الصعيد)" disabled readonly>
+            </div>
+
+            <!-- Bosta Package Size supporting ALL Contract Categories -->
+            <div class="form-group mb-3">
+                <label>حجم الشحنة (حسب جدول عقد بوسطة الرسمي)</label>
+                <select class="form-control" id="calc-bosta-size-select">
+                    <option value="140" data-label="حجم صغير و متوسط (35×40 سم)">حجم صغير و متوسط (140 ج)</option>
+                    <option value="145" data-label="حجم كبير L (45×50 سم)">حجم كبير L (145 ج)</option>
+                    <option value="150" data-label="حجم أكبر XL (55×60 سم)">حجم أكبر XL (150 ج)</option>
+                    <option value="155" data-label="كيس أبيض XXL (100×50 سم)">كيس أبيض XXL (155 ج)</option>
+                    <option value="240" data-label="شحنة كبيرة (> 100×50 سم)">شحنة كبيرة (240 ج)</option>
+                    <option value="994" data-label="شحنة ضخمة (أجهزة منزلية / سلع بيضاء)">شحنة ضخمة - أجهزة منزلية (994 ج)</option>
+                </select>
+            </div>
+
+            <div class="form-group mb-4">
+                <label>نوع العملية</label>
+                <select class="form-control" id="calc-service-type">
+                    <option value="delivery">توصيل تسليم</option>
+                    <option value="exchange">تبديل أوردر</option>
+                    <option value="return">إرجاع أوردر</option>
+                </select>
+            </div>
+
+            <!-- Detailed Contract Breakdown -->
+            <div class="calc-summary-card">
+                <div class="summary-row">
+                    <span>السعر الأساسي قبل الضريبة:</span>
+                    <strong id="calc-base-price">140.00 ج.م</strong>
+                </div>
+                <div class="summary-row">
+                    <span>ضريبة القيمة المضافة (14% VAT):</span>
+                    <strong id="calc-vat-amount">19.60 ج.م</strong>
+                </div>
+                <div class="summary-row">
+                    <span>رسوم التحصيل النقدي (عقد أسوان):</span>
+                    <strong class="text-emerald">0.00 ج.م (مجاناً)</strong>
+                </div>
+                <div class="summary-divider"></div>
+                <div class="summary-row total">
+                    <span>السعر الإجمالي شامل الـ VAT:</span>
+                    <strong id="calc-total-final">159.60 ج.م</strong>
+                </div>
+                <div class="text-subtle text-sm mt-2 text-center">* تم الربط بمعادلات شيت عقد بوسطة أسوان الرسمي (V3.5).</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 1: ADD / EDIT PRODUCT -->
+    <div id="product-modal" class="modal-overlay hidden">
+        <div class="modal-card glass-panel">
+            <div class="modal-header">
+                <h3 id="product-modal-title">إضافة منتج جديد</h3>
+                <button class="icon-btn close-modal"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form id="product-form">
+                <div class="modal-body custom-scroll">
+                    <input type="hidden" id="p-edit-id">
+                    <div class="form-grid cols-2 mb-3">
+                        <div class="form-group">
+                            <label>اسم المنتج الكامل</label>
+                            <input type="text" id="p-name" class="form-control" placeholder="مثال: ثلاجة تورنيدو 16 قدم" required>
+                        </div>
+                        <div class="form-group">
+                            <label>كود المنتج (SKU)</label>
+                            <input type="text" id="p-sku" class="form-control" placeholder="TRN-RF16" required>
+                        </div>
+                        <div class="form-group">
+                            <label>السعر الأساسي (ج.م)</label>
+                            <input type="number" id="p-price" class="form-control" placeholder="18500" required>
+                        </div>
+                        <div class="form-group">
+                            <label>سعر العرض / الخصم (ج.م)</label>
+                            <input type="number" id="p-sale-price" class="form-control" placeholder="17200">
+                        </div>
+                        <div class="form-group">
+                            <label>عدد القطع المتاحة بالمخزن</label>
+                            <input type="number" id="p-stock" class="form-control" value="10" required>
+                        </div>
+                        <div class="form-group">
+                            <label>الحد الأدنى للتنبيه بالمخزن</label>
+                            <input type="number" id="p-stock-threshold" class="form-control" value="5" placeholder="5" title="ينور تاج متبقي قطع قليلة أوتوماتيك لو المخزون نزل عنه">
+                        </div>
+                    </div>
+
+                    <div class="form-grid cols-2 mb-3">
+                        <div class="form-group">
+                            <label>القسم التابع له</label>
+                            <select id="p-category-select" class="form-control">
+                                <!-- Populated dynamically from categories -->
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>حجم بوسطة الشحنة</label>
+                            <select id="p-bosta-size" class="form-control">
+                                <option value="140">حجم صغير و متوسط (140 ج)</option>
+                                <option value="145">حجم كبير L (145 ج)</option>
+                                <option value="150">حجم أكبر XL (150 ج)</option>
+                                <option value="155">كيس أبيض XXL (155 ج)</option>
+                                <option value="240">شحنة كبيرة (240 ج)</option>
+                                <option value="994" selected>شحنة ضخمة - أجهزة منزلية (994 ج)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group mb-3">
+                        <label>وصف المنتج التفصيلي</label>
+                        <textarea id="p-desc" class="form-control" rows="3" placeholder="اكتب وصفاً تسويقياً وفنياً كاملاً..."></textarea>
+                    </div>
+
+                    <!-- Marketing Badges Toggles -->
+                    <div class="form-grid cols-2 mb-3 bg-surface p-3 rounded">
+                        <div class="flex-between">
+                            <span class="font-bold text-sm">تاج "الأكثر مبيعاً"</span>
+                            <label class="switch-toggle">
+                                <input type="checkbox" id="p-tag-bestseller">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="flex-between">
+                            <div>
+                                <span class="font-bold text-sm block">تأكيد تاج المخزون المنخفض</span>
+                                <span class="text-subtle text-sm">يعمل تلقائياً عند انخفاض المخزون</span>
+                            </div>
+                            <label class="switch-toggle">
+                                <input type="checkbox" id="p-tag-lowstock">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Product Images Gallery up to 6 images with Main Image Selector & Delete -->
+                    <div class="form-group">
+                        <div class="flex-between mb-2">
+                            <label class="font-bold text-primary m-0 block">معرض صور المنتج (حتى 6 صور)</label>
+                            <span class="text-subtle text-sm">حدد الصورة الرئيسية بكليك، ويمكنك حذف أي صورة</span>
+                        </div>
+                        <div class="image-gallery-grid" id="product-images-gallery">
+                            <!-- 6 image upload slots rendered dynamically -->
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-ghost close-modal">إلغاء</button>
+                    <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> حفظ المنتج في الكتالوج</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL 2: ADD / EDIT CATEGORY (CATEGORIES CRUD) -->
+    <div id="category-modal" class="modal-overlay hidden">
+        <div class="modal-card glass-panel" style="max-width: 480px;">
+            <div class="modal-header">
+                <h3 id="cat-modal-title">إضافة قسم جديد</h3>
+                <button class="icon-btn close-modal"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form id="category-form">
+                <input type="hidden" id="cat-edit-id">
+                <div class="modal-body custom-scroll">
+                    <div class="form-group mb-3">
+                        <label>اسم القسم</label>
+                        <input type="text" id="cat-name" class="form-control" placeholder="مثال: ثلاجات وديب فريزر" required>
+                    </div>
+                    <div class="form-group mb-3">
+                        <label>وصف القسم المختصر</label>
+                        <input type="text" id="cat-desc" class="form-control" placeholder="وصف يعبر عن القسم ومحتوياته...">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-ghost close-modal">إلغاء</button>
+                    <button type="submit" class="btn btn-primary">حفظ القسم</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL 3: COMPLAINT DETAILS & ACTIONS -->
+    <div id="complaint-modal" class="modal-overlay hidden">
+        <div class="modal-card glass-panel" style="max-width: 520px;">
+            <div class="modal-header">
+                <h3 id="modal-c-client">تفاصيل الشكوى</h3>
+                <button class="icon-btn close-modal"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body custom-scroll">
+                <div class="flex-between mb-3 border-b pb-2">
+                    <div>
+                        <span class="text-subtle text-sm">تاريخ الإرسال:</span>
+                        <strong id="modal-c-date" class="text-dark"></strong>
+                    </div>
+                    <div id="modal-c-status-badge"></div>
+                </div>
+                <div class="form-group mb-3">
+                    <label>نص الشكوى / البلاغ الوارد:</label>
+                    <div id="modal-c-text" class="complaint-text-box"></div>
+                </div>
+                <div class="form-group">
+                    <label>رقم هاتف العميل للتواصل:</label>
+                    <input type="text" id="modal-c-phone" class="form-control font-bold text-primary" readonly>
+                </div>
+            </div>
+            <div class="modal-footer flex-between">
+                <button class="btn btn-whatsapp" id="whatsapp-direct-btn"><i class="fa-brands fa-whatsapp"></i> تواصل عبر واتساب</button>
+                <button class="btn btn-emerald" id="resolve-complaint-btn"><i class="fa-solid fa-check"></i> تغيير الحالة لـ "تم الحل"</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 4: ADD FAQ -->
+    <div id="faq-modal" class="modal-overlay hidden">
+        <div class="modal-card glass-panel" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3>إضافة سؤال شائع</h3>
+                <button class="icon-btn close-modal"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form id="faq-form">
+                <div class="modal-body custom-scroll">
+                    <div class="form-group mb-3">
+                        <label>السؤال</label>
+                        <input type="text" id="faq-q" class="form-control" placeholder="مثال: كم تستغرق مدة التوصيل؟" required>
+                    </div>
+                    <div class="form-group mb-3">
+                        <label>الإجابة</label>
+                        <textarea id="faq-a" class="form-control" rows="3" placeholder="اكتب الإجابة المفصلة..." required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-ghost close-modal">إلغاء</button>
+                    <button type="submit" class="btn btn-primary">حفظ السؤال</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="assets/js/admin.js"></script>
 </body>
 </html>
-
