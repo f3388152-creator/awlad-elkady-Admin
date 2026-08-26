@@ -39,7 +39,7 @@ window.sb_fetch = async (table) => {
         if (table === 'orders') return data.map(o => ({id: String(o.id), status: o.status, date: new Date(o.created_at).toLocaleDateString('ar-EG'), name: o.customer_name, phone: o.customer_phone, secondPhone: o.customer_second_phone, gov: o.governorate, area: o.area, address: o.address, subtotal: Number(o.subtotal) || 0, shipping: Number(o.shipping_fee) || 0, notes: o.notes, items: Array.isArray(o.items) ? o.items : [], tracking_number: o.tracking_number || '—', bosta_status: o.bosta_status || null}));
         if (table === 'complaints') return data.map(c => ({id: c.id, client: c.customer_name || '', phone: c.customer_phone || '', date: new Date(c.created_at).toLocaleDateString('ar-EG'), status: c.status || 'new', text: c.message || ''}));
         if (table === 'site_settings') return data.length ? [{...data[0], id: data[0].id}] : [];
-        if (table === 'categories') return data.map(c => ({...c, desc: c.description || ''}));
+        if (table === 'categories') return data.map(c => ({...c, desc: c.desc || c.description || ''}));
         if (table === 'faqs' || table === 'socials') return data.map(d => ({...d, visible: d.is_visible !== false}));
         return data;
     } catch(e) { console.error('[Admin fetch]', e); throw e; }
@@ -47,8 +47,8 @@ window.sb_fetch = async (table) => {
 
 window.sb_insert = async (table, data) => {
     let payload = data;
-    if (table === 'products') payload = {name: data.name, sku: data.sku || '', price: Number(data.price) || 0, sale_price: data.salePrice ? Number(data.salePrice) : null, stock: Number(data.stock) || 0, stock_threshold: Number(data.stockThreshold) || 5, bosta_size: Number(data.bostaSize) || 0, category: data.category || '', is_bestseller: !!data.bestseller, description: data.desc || '', images: data.images || [], is_active: true};
-    if (table === 'categories') payload = {name: data.name, description: data.desc || '', is_visible: data.is_visible !== false, sort_order: Number(data.sort_order) || 1};
+    if (table === 'products') payload = {name: data.name, sku: data.sku || '', price: Number(data.price) || 0, sale_price: data.salePrice ? Number(data.salePrice) : null, stock: Number(data.stock) || 0, stock_threshold: Number(data.stockThreshold) || 5, bosta_size: Number(data.bostaSize) || 0, is_bestseller: !!data.bestseller, description: data.desc || '', images: data.images || [], is_active: true};
+    if (table === 'categories') payload = {name: data.name, desc: data.desc || '', is_visible: data.is_visible !== false, sort_order: Number(data.sort_order) || 1};
     if (table === 'faqs') payload = {q: data.q, a: data.a, is_visible: data.visible !== false, sort_order: Number(data.sort_order) || 1};
     if (table === 'socials') payload = {name: data.name, icon: data.icon || 'fa-solid fa-link', link: data.link, is_visible: data.visible !== false, sort_order: Number(data.sort_order) || 1};
     return Supabase.insertReturn(table, payload);
@@ -58,7 +58,7 @@ window.sb_update = async (table, id, data) => {
     let payload = data;
     if (table === 'products') payload = {name: data.name, sku: data.sku || '', price: Number(data.price) || 0, sale_price: data.salePrice ? Number(data.salePrice) : null, stock: Number(data.stock) || 0, stock_threshold: Number(data.stockThreshold) || 5, bosta_size: Number(data.bostaSize) || 0, is_bestseller: !!data.bestseller, description: data.desc || '', images: data.images || []};
     if (table === 'products_visibility') { await Supabase.update('products', id, {is_active: data.is_active}); return true; }
-    if (table === 'categories') payload = {name: data.name, description: data.desc || '', is_visible: data.is_visible !== false};
+    if (table === 'categories') payload = {name: data.name, desc: data.desc || '', is_visible: data.is_visible !== false};
     if (table === 'complaints') payload = {status: data.status};
     if (table === 'faqs' || table === 'socials') payload = {is_visible: data.visible};
     await Supabase.update(table, id, payload);
