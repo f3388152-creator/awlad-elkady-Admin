@@ -12,9 +12,10 @@ module.exports = async (req, res) => {
     return json(res, 400, { error: 'Invalid order confirmation' });
   }
 
+  let order = null;
   try {
     const rows = await supabase(`/rest/v1/orders?id=eq.${orderId}&customer_access_token=eq.${encodeURIComponent(accessToken)}&select=*`);
-    const order = rows?.[0];
+    order = rows?.[0] || null;
     if (!order) return json(res, 404, { error: 'Order not found' });
     if (order.bosta_tracking_number || order.bosta_delivery_id) {
       return json(res, 200, { ok: true, already_created: true, tracking_number: order.bosta_tracking_number || null });
@@ -27,6 +28,12 @@ module.exports = async (req, res) => {
     const source = result?.data || result?.delivery || result || {};
     const trackingNumber = source.trackingNumber || source.tracking_number || result?.trackingNumber || null;
     const deliveryId = source._id || source.id || result?.deliveryId || null;
+    if (!trackingNumber && !deliveryId) {
+      const error = new Error('BOSTA_RESPONSE_MISSING_IDENTIFIERS');
+      error.status = 502;
+      error.data = { response_keys: Object.keys(source || {}).slice(0, 20) };
+      throw error;
+    }
     const businessReference = source.businessReference || `AWK-${order.id}`;
     await supabase(`/rest/v1/orders?id=eq.${order.id}`, 'PATCH', {
       bosta_status: 'created',
@@ -38,7 +45,16 @@ module.exports = async (req, res) => {
     return json(res, 200, { ok: true, tracking_number: trackingNumber, delivery_id: deliveryId });
   } catch (error) {
     console.error('[bosta-create-delivery]', error.message, error.data || '');
+    if (order?.id) {
+      await supabase(`/rest/v1/orders?id=eq.${order.id}`, 'PATCH', {
+        bosta_status: 'failed',
+        bosta_last_event: { error: error.message, status: error.status || 502, at: new Date().toISOString() }
+      }, 'return=minimal').catch(patchError => console.error('[bosta-create-delivery] status patch failed', patchError.message));
+    }
     if (error.message === 'BOSTA_SERVER_ENV_MISSING') return json(res, 503, { error: 'Bosta integration is not configured' });
+    if (error.message === 'BOSTA_ADDRESS_INCOMPLETE') return json(res, 422, { error: 'عنوان الشحن يحتاج المحافظة والمنطقة/الحي.' });
+    if (error.message === 'BOSTA_CITY_NOT_FOUND') return json(res, 422, { error: 'المحافظة غير موجودة في تغطية Bosta.' });
+    if (error.message === 'BOSTA_DISTRICT_NOT_FOUND') return json(res, 422, { error: 'المنطقة/الحي غير موجود في تغطية Bosta.' });
     return json(res, error.status || 502, { error: 'Bosta delivery creation failed' });
   }
 };

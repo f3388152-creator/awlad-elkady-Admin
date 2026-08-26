@@ -54,19 +54,70 @@ async function supabase(path, method = 'GET', body, prefer = 'return=representat
   return data;
 }
 
-function bostaPayload(order, packageTypeOverride) {
+const EGYPT_COUNTRY_ID = '60e4482c7cb7d4bc4849c4d5';
+let bostaLocationsCache = { expiresAt: 0, rows: null };
+
+function normalizeArabic(value) {
+  return String(value || '').trim().toLowerCase()
+    .normalize('NFKD').replace(/[\u064B-\u065F\u0670]/g, '')
+    .replace(/[أإآ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه')
+    .replace(/\s+/g, ' ');
+}
+
+async function getBostaLocations() {
+  if (bostaLocationsCache.rows && bostaLocationsCache.expiresAt > Date.now()) return bostaLocationsCache.rows;
+  const response = await fetch(`${BOSTA_BASE_URL}/cities/getAllDistricts?countryId=${EGYPT_COUNTRY_ID}`);
+  const text = await response.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch (_) { data = null; }
+  if (!response.ok || !Array.isArray(data?.data)) {
+    const error = new Error('BOSTA_LOCATIONS_FAILED');
+    error.status = response.status || 502;
+    error.data = data;
+    throw error;
+  }
+  const rows = data.data.flatMap(city => (Array.isArray(city.districts) ? city.districts : []).map(district => ({
+    cityId: String(city.cityId || ''),
+    cityName: city.cityName || '',
+    cityOtherName: city.cityOtherName || '',
+    districtId: String(district.districtId || ''),
+    districtName: district.districtName || '',
+    districtOtherName: district.districtOtherName || '',
+    dropOffAvailability: district.dropOffAvailability !== false
+  }))).filter(row => row.cityId && row.districtId && row.dropOffAvailability);
+  bostaLocationsCache = { expiresAt: Date.now() + 10 * 60 * 1000, rows };
+  return rows;
+}
+
+async function resolveBostaAddress(order) {
+  const governorate = normalizeArabic(order.governorate);
+  const area = normalizeArabic(order.area);
+  if (!governorate || !area) throw new Error('BOSTA_ADDRESS_INCOMPLETE');
+  const locations = await getBostaLocations();
+  const cityRows = locations.filter(row => [row.cityName, row.cityOtherName].some(value => normalizeArabic(value) === governorate));
+  if (!cityRows.length) throw new Error('BOSTA_CITY_NOT_FOUND');
+  const district = cityRows.find(row => [row.districtName, row.districtOtherName].some(value => normalizeArabic(value) === area));
+  if (!district) throw new Error('BOSTA_DISTRICT_NOT_FOUND');
+  return {
+    city: district.cityName,
+    cityId: district.cityId,
+    districtId: district.districtId,
+    districtName: district.districtName,
+    firstLine: String(order.address || '').trim(),
+    secondLine: String(order.area || '').trim()
+  };
+}
+
+async function bostaPayload(order, packageTypeOverride) {
   const items = Array.isArray(order.items) ? order.items : [];
   const description = items.map(item => `${item.name || 'منتج'} × ${Number(item.qty || 1)}`).join('، ').slice(0, 500);
-  const packageType = String(packageTypeOverride || process.env.BOSTA_DEFAULT_PACKAGE_TYPE || 'SMALL');
+  const packageType = String(packageTypeOverride || process.env.BOSTA_DEFAULT_PACKAGE_TYPE || 'SMALL').toUpperCase();
+  const dropOffAddress = await resolveBostaAddress(order);
   return {
     type: 10,
     businessReference: `AWK-${order.id}`,
     businessLocationId: BUSINESS_LOCATION_ID,
-    dropOffAddress: {
-      city: order.governorate,
-      firstLine: order.address,
-      secondLine: order.area || undefined
-    },
+    dropOffAddress,
     receiver: {
       firstName: order.customer_name,
       lastName: '',
@@ -83,10 +134,11 @@ function bostaPayload(order, packageTypeOverride) {
 
 async function createBostaDelivery(order, packageTypeOverride) {
   if (!BOSTA_API_KEY || !BUSINESS_LOCATION_ID) throw new Error('BOSTA_SERVER_ENV_MISSING');
+  const payload = await bostaPayload(order, packageTypeOverride);
   const response = await fetch(`${BOSTA_BASE_URL}/deliveries?apiVersion=1`, {
     method: 'POST',
     headers: { Authorization: BOSTA_API_KEY, 'Content-Type': 'application/json' },
-    body: JSON.stringify(bostaPayload(order, packageTypeOverride))
+    body: JSON.stringify(payload)
   });
   const text = await response.text();
   let data = null;
@@ -101,4 +153,4 @@ function webhookAuthorized(req) {
   return header === WEBHOOK_AUTH_TOKEN || header === `Bearer ${WEBHOOK_AUTH_TOKEN}`;
 }
 
-module.exports = { SUPABASE_URL, BOSTA_API_KEY, BUSINESS_LOCATION_ID, WEBHOOK_AUTH_TOKEN, cors, json, parseBody, supabase, createBostaDelivery, webhookAuthorized };
+module.exports = { SUPABASE_URL, BOSTA_API_KEY, BUSINESS_LOCATION_ID, WEBHOOK_AUTH_TOKEN, cors, json, parseBody, supabase, createBostaDelivery, getBostaLocations, webhookAuthorized };

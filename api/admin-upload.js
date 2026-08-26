@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const { getSessionUser, isPrimaryAdmin, hasPermission, SUPABASE_URL, SUPABASE_ANON_KEY, token } = require('./admin-session');
+const { getSessionUser, isPrimaryAdmin, hasPermission, SUPABASE_URL, SERVICE_ROLE_KEY } = require('./admin-session');
 
 const ALLOWED_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -11,7 +11,7 @@ module.exports = async (req, res) => {
   if (!isPrimaryAdmin(user) && !hasPermission(user, 'products.upload') && !hasPermission(user, 'landing.edit')) {
     return res.status(403).json({ error: 'Permission denied' });
   }
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return res.status(503).json({ error: 'Storage is not configured' });
+  if (!SUPABASE_URL || !SERVICE_ROLE_KEY) return res.status(503).json({ error: 'Storage is not configured' });
 
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
@@ -26,7 +26,7 @@ module.exports = async (req, res) => {
     const fileName = `${Date.now()}_${crypto.randomBytes(5).toString('hex')}.${ext}`;
     const upstream = await fetch(`${SUPABASE_URL}/storage/v1/object/${bucket}/${fileName}`, {
       method: 'POST',
-      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token(req)}`, 'Content-Type': mimeType, 'x-upsert': 'false' },
+      headers: { apikey: SERVICE_ROLE_KEY, Authorization: `Bearer ${SERVICE_ROLE_KEY}`, 'Content-Type': mimeType, 'x-upsert': 'false' },
       body: buffer
     });
     const text = await upstream.text();

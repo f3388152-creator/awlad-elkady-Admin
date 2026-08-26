@@ -21,7 +21,13 @@ window.adminFetch = async function adminFetch(url, options = {}) {
   let response = await fetch(url, requestOptions);
   if (response.status !== 401 || String(url).includes('/api/admin-refresh')) return response;
   const refreshed = await refreshAdminSession();
-  if (!refreshed) return response;
+  if (!refreshed) {
+    document.getElementById('login-screen')?.classList.remove('unlocked');
+    document.getElementById('dashboard')?.classList.add('hidden');
+    const loginError = document.getElementById('login-error');
+    if (loginError) loginError.textContent = 'انتهت الجلسة؛ سجل الدخول مرة أخرى.';
+    return response;
+  }
   return fetch(url, requestOptions);
 };
 

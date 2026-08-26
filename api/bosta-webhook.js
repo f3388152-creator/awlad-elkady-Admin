@@ -50,9 +50,10 @@ module.exports = async (req, res) => {
     }
     if (!order) return json(res, 404, { error: 'Shipment order not found' });
 
-    const state = Number(event.state);
+    const stateValue = event.state && typeof event.state === 'object' ? event.state.code : event.state;
+    const state = Number(stateValue);
     const patch = {
-      bosta_status: Number.isFinite(state) ? String(state) : (event.state || null),
+      bosta_status: Number.isFinite(state) ? String(state) : (stateValue || null),
       bosta_tracking_number: tracking || undefined,
       bosta_delivery_id: deliveryId || undefined,
       bosta_business_reference: businessReference || undefined,

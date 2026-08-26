@@ -7,6 +7,18 @@ function safeText(value) {
     return String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[char]));
 }
 
+function readableError(error, fallback = 'حدث خطأ غير متوقع.') {
+    const raw = String(error?.message || '').replace(/\s+/g, ' ').trim();
+    if (!raw) return fallback;
+    const withoutPrefix = raw.replace(/^\[[^\]]+\]\s*/, '');
+    try {
+        const parsed = JSON.parse(withoutPrefix);
+        if (parsed?.error) return String(parsed.error).slice(0, 240);
+        if (parsed?.message) return String(parsed.message).slice(0, 240);
+    } catch (_) { /* keep plain message */ }
+    return withoutPrefix.slice(0, 240);
+}
+
 function normalizeProduct(p) {
     return {
         id: p.id, name: p.name || '', sku: p.sku || '', price: Number(p.price) || 0,
@@ -24,7 +36,7 @@ window.sb_fetch = async (table) => {
         const query = table === 'site_settings' ? 'id=eq.1' : 'order=created_at.desc';
         const data = await Supabase.select(table, query);
         if (table === 'products') return data.map(normalizeProduct);
-        if (table === 'orders') return data.map(o => ({id: String(o.id), status: o.status, date: new Date(o.created_at).toLocaleDateString('ar-EG'), name: o.customer_name, phone: o.customer_phone, secondPhone: o.customer_second_phone, gov: o.governorate, area: o.area, address: o.address, subtotal: Number(o.subtotal) || 0, shipping: Number(o.shipping_fee) || 0, notes: o.notes, items: Array.isArray(o.items) ? o.items : [], tracking_number: o.tracking_number || '—'}));
+        if (table === 'orders') return data.map(o => ({id: String(o.id), status: o.status, date: new Date(o.created_at).toLocaleDateString('ar-EG'), name: o.customer_name, phone: o.customer_phone, secondPhone: o.customer_second_phone, gov: o.governorate, area: o.area, address: o.address, subtotal: Number(o.subtotal) || 0, shipping: Number(o.shipping_fee) || 0, notes: o.notes, items: Array.isArray(o.items) ? o.items : [], tracking_number: o.tracking_number || '—', bosta_status: o.bosta_status || null}));
         if (table === 'complaints') return data.map(c => ({id: c.id, client: c.customer_name || '', phone: c.customer_phone || '', date: new Date(c.created_at).toLocaleDateString('ar-EG'), status: c.status || 'new', text: c.message || ''}));
         if (table === 'site_settings') return data.length ? [{...data[0], id: data[0].id}] : [];
         if (table === 'categories') return data.map(c => ({...c, desc: c.description || ''}));
@@ -580,8 +592,10 @@ function renderOrders(orders) {
     container.innerHTML = orders.map((o, idx) => {
         const total = ((o.subtotal || 0) + (o.shipping || 0)).toFixed(2);
         const trackingHtml = o.tracking_number && o.tracking_number !== '—'
-            ? `<span class="text-subtle text-sm block mt-1"><i class="fa-solid fa-truck"></i> بوليصة: <strong dir="ltr">${o.tracking_number}</strong></span>`
-            : `<span class="text-subtle text-sm block mt-1 opacity-50">لا يوجد رقم بوليصة حتى الآن</span>`;
+            ? `<span class="text-subtle text-sm block mt-1"><i class="fa-solid fa-truck"></i> بوليصة: <strong dir="ltr">${safeText(o.tracking_number)}</strong></span>`
+            : o.bosta_status === 'failed'
+                ? `<span class="text-danger text-sm block mt-1"><i class="fa-solid fa-triangle-exclamation"></i> فشل إنشاء بوليصة Bosta</span>`
+                : `<span class="text-subtle text-sm block mt-1 opacity-50">لا يوجد رقم بوليصة حتى الآن</span>`;
 
         return `
             <div class="order-card glass-panel" data-idx="${idx}">
@@ -691,6 +705,8 @@ async function initProductsAndCategories() {
             if (productForm) productForm.reset();
             document.getElementById('p-edit-id').value = '';
             document.getElementById('product-modal-title').textContent = 'إضافة منتج جديد';
+            const sizeSelect = document.getElementById('p-bosta-size');
+            if (sizeSelect) sizeSelect.value = '140';
             populateCategoryDropdowns();
             renderGalleryUploaderSlots([]);
             productModal.classList.remove('hidden');
@@ -706,40 +722,52 @@ async function initProductsAndCategories() {
 
             try {
                 const editId = document.getElementById('p-edit-id')?.value;
-                const stockVal = parseInt(document.getElementById('p-stock')?.value) || 0;
-                const thresholdVal = parseInt(document.getElementById('p-stock-threshold')?.value) || 5;
+                const name = document.getElementById('p-name')?.value?.trim();
+                const sku = document.getElementById('p-sku')?.value?.trim();
+                const price = parseFloat(document.getElementById('p-price')?.value);
+                const saleRaw = document.getElementById('p-sale-price')?.value?.trim() || '';
+                const salePrice = saleRaw === '' ? null : parseFloat(saleRaw);
+                const stockVal = parseInt(document.getElementById('p-stock')?.value, 10);
+                const thresholdVal = parseInt(document.getElementById('p-stock-threshold')?.value, 10);
 
                 const categorySelect = document.getElementById('p-category-select');
                 const selectedOptions = Array.from(categorySelect?.selectedOptions || []);
                 const categoryIds = selectedOptions.map(option => Number(option.dataset.id)).filter(Number.isInteger);
+                if (categoryIds.length && !can('categories.assign')) throw new Error('ليس لديك صلاحية ربط المنتج بالأقسام.');
+
                 const newProd = {
-                    name: document.getElementById('p-name')?.value?.trim(),
-                    sku: document.getElementById('p-sku')?.value?.trim(),
-                    price: parseFloat(document.getElementById('p-price')?.value),
-                    salePrice: document.getElementById('p-sale-price')?.value,
-                    stock: stockVal,
-                    stockThreshold: thresholdVal,
-                    bostaSize: parseFloat(document.getElementById('p-bosta-size')?.value) || 0,
+                    name,
+                    sku,
+                    price,
+                    salePrice,
+                    stock: Number.isFinite(stockVal) ? stockVal : 0,
+                    stockThreshold: Number.isFinite(thresholdVal) && thresholdVal >= 0 ? thresholdVal : 5,
+                    bostaSize: parseFloat(document.getElementById('p-bosta-size')?.value) || 140,
                     category: selectedOptions[0]?.value || '',
                     categoryIds,
                     bestseller: document.getElementById('p-tag-bestseller')?.checked,
                     desc: document.getElementById('p-desc')?.value?.trim(),
                     images: currentEditingImages
                 };
-                if (!newProd.name || !Number.isFinite(newProd.price) || newProd.price < 0) throw new Error('راجع اسم المنتج والسعر');
+                if (!newProd.name || !newProd.sku || !Number.isFinite(newProd.price) || newProd.price < 0) throw new Error('راجع اسم المنتج وSKU والسعر.');
+                if (newProd.stock < 0) throw new Error('المخزون لا يمكن أن يكون بالسالب.');
+                if (salePrice !== null && (!Number.isFinite(salePrice) || salePrice <= 0 || salePrice >= newProd.price)) throw new Error('سعر العرض لازم يكون أكبر من صفر وأقل من السعر الأساسي.');
 
                 let saved;
                 if (editId) saved = await sb_update('products', editId, newProd);
                 else saved = await sb_insert('products', newProd);
                 const savedId = editId || saved?.id;
-                if (savedId && typeof Supabase.replaceProductCategories === 'function') await Supabase.replaceProductCategories(savedId, categoryIds);
+                if (!savedId) throw new Error('الخادم لم يرجع معرف المنتج بعد الحفظ. لم يتم تأكيد الإضافة.');
+                if (typeof Supabase.replaceProductCategories === 'function' && (can('categories.assign') || categoryIds.length)) {
+                    await Supabase.replaceProductCategories(savedId, categoryIds);
+                }
 
                 productModal.classList.add('hidden');
                 await refreshDashboardData();
                 alert('تم حفظ المنتج بنجاح!');
             } catch(error) {
-                alert('حدث خطأ أثناء الحفظ. يرجى المحاولة لاحقاً.');
-                console.error(error);
+                alert('تعذر حفظ المنتج: ' + readableError(error, 'راجع البيانات وحاول مرة أخرى.'));
+                console.error('[product save]', error);
             } finally {
                 if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = originalText; }
             }
@@ -763,18 +791,24 @@ async function initProductsAndCategories() {
     if (categoryForm) {
         categoryForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const editId = document.getElementById('cat-edit-id').value;
-            const name = document.getElementById('cat-name').value;
-            const desc = document.getElementById('cat-desc').value;
-
-            if (editId) {
-                await sb_update('categories', editId, {name, desc});
-            } else {
-                await sb_insert('categories', {name, desc});
+            const submitBtn = categoryForm.querySelector('button[type="submit"]');
+            const originalText = submitBtn?.innerHTML || 'حفظ القسم';
+            const editId = document.getElementById('cat-edit-id')?.value;
+            const name = document.getElementById('cat-name')?.value?.trim();
+            const desc = document.getElementById('cat-desc')?.value?.trim();
+            if (!name) return alert('اكتب اسم القسم أولاً.');
+            if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'جاري الحفظ...'; }
+            try {
+                if (editId) await sb_update('categories', editId, {name, desc});
+                else await sb_insert('categories', {name, desc});
+                categoryModal.classList.add('hidden');
+                await refreshDashboardData();
+            } catch (error) {
+                alert('تعذر حفظ القسم: ' + readableError(error, 'راجع البيانات وحاول مرة أخرى.'));
+                console.error('[category save]', error);
+            } finally {
+                if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = originalText; }
             }
-
-            categoryModal.classList.add('hidden');
-            await refreshDashboardData();
         });
     }
 }
@@ -866,7 +900,8 @@ window.handleImageSlotUpload = async function(event, index) {
         currentEditingImages.push({ url, main: isMain });
         renderGalleryUploaderSlots(currentEditingImages);
     } catch (e) {
-        alert("Upload failed.");
+        alert('تعذر رفع الصورة: ' + readableError(e, 'تحقق من نوع وحجم الصورة وصلاحيات الحساب.'));
+        console.error('[image upload]', e);
     }
 };
 
