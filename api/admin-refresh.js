@@ -3,8 +3,8 @@ const {
   SUPABASE_ANON_KEY,
   getSessionUser,
   isPrimaryAdmin
-} = require('./admin-session');
-const { findById, cleanStaff } = require('./_staff');
+} = require('../lib/admin-session');
+const { findById, cleanStaff } = require('../lib/_staff');
 
 function cookieValue(req, name) {
   const raw = String(req.headers.cookie || '')

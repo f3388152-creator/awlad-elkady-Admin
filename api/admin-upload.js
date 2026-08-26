@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const { getSessionUser, isPrimaryAdmin, hasPermission, SUPABASE_URL, SERVICE_ROLE_KEY } = require('./admin-session');
+const { getSessionUser, isPrimaryAdmin, hasPermission, SUPABASE_URL, SERVICE_ROLE_KEY } = require('../lib/admin-session');
 
 const ALLOWED_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
 const MAX_BYTES = 5 * 1024 * 1024;

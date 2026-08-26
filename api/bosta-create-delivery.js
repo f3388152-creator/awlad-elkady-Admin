@@ -1,4 +1,4 @@
-const { cors, json, parseBody, supabase, createBostaDelivery } = require('./_server');
+const { cors, json, parseBody, supabase, createBostaDelivery } = require('../lib/_server');
 
 module.exports = async (req, res) => {
   cors(req, res);

@@ -1,4 +1,4 @@
-const { token, isAdmin, SUPABASE_URL, SUPABASE_ANON_KEY } = require('./admin-session');
+const { token, isAdmin, SUPABASE_URL, SUPABASE_ANON_KEY } = require('../lib/admin-session');
 module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).end();
   const access = token(req);

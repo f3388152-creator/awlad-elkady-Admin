@@ -1,4 +1,4 @@
-const { cors, json, getBostaLocations } = require('./_server');
+const { cors, json, getBostaLocations } = require('../lib/_server');
 
 module.exports = async (req, res) => {
   cors(req, res);

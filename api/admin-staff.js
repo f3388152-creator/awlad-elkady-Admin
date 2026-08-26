@@ -1,5 +1,5 @@
-const { isOwner } = require('./admin-session');
-const { listStaff, createStaff, updateStaff, cleanStaff } = require('./_staff');
+const { isOwner } = require('../lib/admin-session');
+const { listStaff, createStaff, updateStaff, cleanStaff } = require('../lib/_staff');
 
 function body(req) {
   if (req.body && typeof req.body === 'object') return req.body;
@@ -15,7 +15,7 @@ module.exports = async (req, res) => {
     if (req.method === 'GET') return res.status(200).json((await listStaff()).map(cleanStaff));
     const payload = body(req);
     if (req.method === 'PATCH' && String(req.query?.scope || '') === 'all') {
-      const { supabase } = require('./_server');
+      const { supabase } = require('../lib/_server');
       const patch = {};
       if (payload.session_enabled !== undefined) patch.session_enabled = Boolean(payload.session_enabled);
       if (payload.session_minutes !== undefined) {

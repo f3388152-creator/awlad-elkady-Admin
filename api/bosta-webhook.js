@@ -1,4 +1,4 @@
-const { cors, json, parseBody, supabase, webhookAuthorized } = require('./_server');
+const { cors, json, parseBody, supabase, webhookAuthorized } = require('../lib/_server');
 
 const STATUS_MAP = {
   10: 'جديد',

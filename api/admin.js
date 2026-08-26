@@ -1,4 +1,4 @@
-const { token, authorize, SERVICE_ROLE_KEY, SUPABASE_URL } = require('./admin-session');
+const { token, authorize, SERVICE_ROLE_KEY, SUPABASE_URL } = require('../lib/admin-session');
 
 const ALLOWED_TABLES = new Set([
   'products', 'categories', 'product_categories', 'orders', 'complaints',

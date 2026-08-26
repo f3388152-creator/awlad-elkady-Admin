@@ -1,5 +1,5 @@
-const { SUPABASE_URL, SUPABASE_ANON_KEY } = require('./admin-session');
-const { normalizePhone, validPhone, loginEmail, findByPhone } = require('./_staff');
+const { SUPABASE_URL, SUPABASE_ANON_KEY } = require('../lib/admin-session');
+const { normalizePhone, validPhone, loginEmail, findByPhone } = require('../lib/_staff');
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });

@@ -1,4 +1,4 @@
-const { getSessionUser, isAdmin, isPrimaryAdmin, getPermissions } = require('./admin-session');
+const { getSessionUser, isAdmin, isPrimaryAdmin, getPermissions } = require('../lib/admin-session');
 
 module.exports = async (req, res) => {
   const admin = await isAdmin(req);
