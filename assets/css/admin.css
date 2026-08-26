@@ -546,3 +546,30 @@ textarea.form-control { resize: vertical; }
 .staff-permissions-grid input { accent-color: var(--clr-primary); }
 .staff-list .btn { margin-inline-start: .35rem; }
 @media (max-width: 700px) { .staff-management-panel { padding: .75rem; } .staff-permissions-grid { grid-template-columns: 1fr !important; } }
+
+/* Desktop density tuning: keep mobile layout unchanged. */
+@media (min-width: 1100px) {
+    body { font-size: .82rem; }
+    .sidebar { width: 210px; }
+    .sidebar-brand { padding: 1rem .75rem; }
+    .brand-logo { width: 108px; }
+    .nav-item { padding: .58rem .75rem; font-size: .8rem; gap: .55rem; }
+    .nav-item i { width: 17px; font-size: .9rem; }
+    .main-workspace { gap: .7rem; }
+    .top-bar { padding: .55rem 1rem; }
+    .page-title { font-size: 1rem; }
+    .control-bar { padding: .55rem 1rem; gap: .5rem; }
+    .btn { padding: .42rem .85rem; font-size: .78rem; }
+    .btn-sm { padding: .28rem .6rem; font-size: .72rem; }
+    .overview-grid { gap: .7rem; }
+    .stat-card { min-height: 92px; padding: .85rem; }
+    .stat-card strong { font-size: 1.55rem; }
+    .products-grid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: .75rem; }
+    .product-card-body, .order-card, .complaint-card, .category-card { padding: .85rem; }
+    .settings-content { padding: 1rem 1.25rem; }
+    .settings-sidebar { width: 195px; padding: .75rem .4rem; }
+    .settings-tab-btn { padding: .58rem .75rem; font-size: .78rem; }
+    .form-grid { gap: .7rem; }
+    .form-control { padding: .42rem .7rem; font-size: .78rem; }
+    .staff-management-panel { padding: .8rem; }
+}

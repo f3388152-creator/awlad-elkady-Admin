@@ -124,7 +124,7 @@ function initPasswordAuth() {
             if (staffPhoneInput) staffPhoneInput.value = '';
             if (loginError) loginError.textContent = '';
         });
-        fetch('/api/admin-check', { credentials: 'include' }).then(async response => {
+        window.adminFetch('/api/admin-check').then(async response => {
             if (response.ok) {
                 window.ADMIN_SESSION = await response.json();
                 applySessionPermissions();
@@ -159,7 +159,7 @@ function applySessionPermissions() {
 
 async function hydrateAdminSession() {
     try {
-        const response = await fetch('/api/admin-check', { credentials: 'include' });
+        const response = await window.adminFetch('/api/admin-check');
         if (!response.ok) throw new Error('SESSION_FAILED');
         window.ADMIN_SESSION = await response.json();
         applySessionPermissions();
@@ -183,6 +183,8 @@ function resetStaffForm() {
     form?.reset();
     const id = document.getElementById('staff-id'); if (id) id.value = '';
     const active = document.getElementById('staff-active'); if (active) active.checked = true;
+    const sessionEnabled = document.getElementById('staff-session-enabled'); if (sessionEnabled) sessionEnabled.checked = true;
+    const sessionMinutes = document.getElementById('staff-session-minutes'); if (sessionMinutes) sessionMinutes.value = '60';
     fillStaffPermissions({});
 }
 
@@ -195,12 +197,14 @@ window.editStaff = function(id) {
     document.getElementById('staff-name').value = staff.display_name || '';
     document.getElementById('staff-password').value = '';
     document.getElementById('staff-active').checked = staff.is_active !== false;
+    document.getElementById('staff-session-enabled').checked = staff.session_enabled !== false;
+    document.getElementById('staff-session-minutes').value = staff.session_minutes || 60;
     fillStaffPermissions(staff.permissions || {});
     document.getElementById('staff-management-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 };
 
 window.toggleStaff = async function(id, active) {
-    const response = await fetch(`/api/admin-staff?id=${encodeURIComponent(id)}`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_active: active }) });
+    const response = await window.adminFetch(`/api/admin-staff?id=${encodeURIComponent(id)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_active: active }) });
     if (!response.ok) return alert('تعذر تغيير حالة الموظف.');
     await loadStaffList();
 };
@@ -209,14 +213,14 @@ function renderStaffList(rows) {
     const target = document.getElementById('staff-list');
     if (!target) return;
     if (!rows.length) { target.innerHTML = '<p class="text-subtle">لا يوجد موظفون مضافون حالياً.</p>'; return; }
-    target.innerHTML = `<div class="table-responsive"><table class="data-table"><thead><tr><th>الاسم</th><th>الموبايل</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody>${rows.map(row => `<tr><td>${safeText(row.display_name)}</td><td dir="ltr">${safeText(row.phone)}</td><td>${row.is_active === false ? '<span class="status-badge status-danger">موقوف</span>' : '<span class="status-badge status-success">نشط</span>'}</td><td><button class="btn btn-secondary btn-sm" type="button" onclick="editStaff('${safeText(row.id)}')">تعديل</button><button class="btn btn-secondary btn-sm" type="button" onclick="toggleStaff('${safeText(row.id)}', ${row.is_active === false})">${row.is_active === false ? 'تفعيل' : 'إيقاف'}</button></td></tr>`).join('')}</tbody></table></div>`;
+    target.innerHTML = `<div class="table-responsive"><table class="data-table"><thead><tr><th>الاسم</th><th>الموبايل</th><th>الحالة</th><th>الجلسة</th><th>إجراء</th></tr></thead><tbody>${rows.map(row => `<tr><td>${safeText(row.display_name)}</td><td dir="ltr">${safeText(row.phone)}</td><td>${row.is_active === false ? '<span class="status-badge status-danger">موقوف</span>' : '<span class="status-badge status-success">نشط</span>'}</td><td>${row.session_enabled === false ? 'بدون انتهاء' : `${Number(row.session_minutes) || 60} دقيقة`}</td><td><button class="btn btn-secondary btn-sm" type="button" onclick="editStaff('${safeText(row.id)}')">تعديل</button><button class="btn btn-secondary btn-sm" type="button" onclick="toggleStaff('${safeText(row.id)}', ${row.is_active === false})">${row.is_active === false ? 'تفعيل' : 'إيقاف'}</button></td></tr>`).join('')}</tbody></table></div>`;
 }
 
 async function loadStaffList() {
     const target = document.getElementById('staff-list');
     if (!target || window.ADMIN_SESSION?.owner !== true) return;
     try {
-        const response = await fetch('/api/admin-staff', { credentials: 'include' });
+        const response = await window.adminFetch('/api/admin-staff');
         if (!response.ok) throw new Error('STAFF_LIST_FAILED');
         window.staffCache = await response.json();
         renderStaffList(window.staffCache);
@@ -231,12 +235,21 @@ function initStaffManagement() {
     staffManagementStarted = true;
     const form = document.getElementById('staff-form');
     document.getElementById('staff-reset-btn')?.addEventListener('click', () => { resetStaffForm(); document.getElementById('staff-phone').disabled = false; });
+    document.getElementById('apply-staff-global-session')?.addEventListener('click', async () => {
+        const enabled = document.getElementById('staff-global-session-enabled')?.checked;
+        const minutes = Number(document.getElementById('staff-global-session-minutes')?.value) || 60;
+        if (minutes < 15 || minutes > 43200) return alert('المدة لازم تكون بين 15 دقيقة و30 يوم.');
+        const response = await window.adminFetch('/api/admin-staff?scope=all', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_enabled: enabled, session_minutes: minutes }) });
+        if (!response.ok) return alert('تعذر تطبيق إعداد الجلسة على الموظفين.');
+        await loadStaffList();
+        alert('تم تطبيق إعداد الجلسة على كل الموظفين.');
+    });
     form?.addEventListener('submit', async event => {
         event.preventDefault();
         const id = document.getElementById('staff-id')?.value;
-        const payload = { phone: document.getElementById('staff-phone')?.value, display_name: document.getElementById('staff-name')?.value, password: document.getElementById('staff-password')?.value, is_active: document.getElementById('staff-active')?.checked, permissions: staffPermissionsFromForm() };
+        const payload = { phone: document.getElementById('staff-phone')?.value, display_name: document.getElementById('staff-name')?.value, password: document.getElementById('staff-password')?.value, is_active: document.getElementById('staff-active')?.checked, session_enabled: document.getElementById('staff-session-enabled')?.checked, session_minutes: Number(document.getElementById('staff-session-minutes')?.value) || 60, permissions: staffPermissionsFromForm() };
         if (id && !payload.password) delete payload.password;
-        const response = await fetch(id ? `/api/admin-staff?id=${encodeURIComponent(id)}` : '/api/admin-staff', { method: id ? 'PATCH' : 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        const response = await window.adminFetch(id ? `/api/admin-staff?id=${encodeURIComponent(id)}` : '/api/admin-staff', { method: id ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         if (!response.ok) { let data = {}; try { data = await response.json(); } catch (_) {} return alert(data.error || 'تعذر حفظ الموظف.'); }
         resetStaffForm();
         document.getElementById('staff-phone').disabled = false;

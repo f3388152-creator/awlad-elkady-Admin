@@ -24,6 +24,18 @@ const WRITE_PERMISSIONS = {
 
 function sendError(res, status, error) { return res.status(status).json({ error }); }
 
+function orderUpdatePermission(body) {
+  const keys = Object.keys(body && typeof body === 'object' ? body : {});
+  const statusFields = new Set(['status']);
+  const customerFields = new Set(['customer_name', 'customer_phone', 'customer_second_phone', 'governorate', 'area', 'address', 'notes']);
+  const unknownField = keys.some(key => !statusFields.has(key) && !customerFields.has(key));
+  if (unknownField || !keys.length) return ['orders.update_status', 'orders.update_customer'];
+  const required = [];
+  if (keys.some(key => statusFields.has(key))) required.push('orders.update_status');
+  if (keys.some(key => customerFields.has(key))) required.push('orders.update_customer');
+  return required;
+}
+
 function siteSettingsPermission(body) {
   const keys = Object.keys(body && typeof body === 'object' ? body : {});
   if (!keys.length) return 'landing.edit';
@@ -35,8 +47,13 @@ function siteSettingsPermission(body) {
     [['bosta_default_package_type'], 'landing.edit_bosta'],
     [['maintenance_mode', 'maintenance_message'], 'landing.edit_maintenance']
   ];
-  for (const [fields, permission] of groups) if (keys.every(key => fields.includes(key))) return permission;
-  return 'landing.edit';
+  const required = new Set();
+  for (const key of keys) {
+    const group = groups.find(([fields]) => fields.includes(key));
+    if (!group) return 'landing.edit';
+    required.add(group[1]);
+  }
+  return [...required];
 }
 
 async function upstream(path, method, req, body, prefer = 'return=minimal') {
@@ -91,7 +108,9 @@ module.exports = async (req, res) => {
 
   const permission = action === 'select'
     ? READ_PERMISSIONS[table]
-    : (table === 'site_settings' && action === 'update' ? siteSettingsPermission(req.body) : WRITE_PERMISSIONS[table]?.[action]);
+    : (table === 'orders' && action === 'update'
+      ? orderUpdatePermission(req.body)
+      : (table === 'site_settings' && action === 'update' ? siteSettingsPermission(req.body) : WRITE_PERMISSIONS[table]?.[action]));
   if (!permission) return sendError(res, 400, 'Unsupported action');
   const auth = await authorize(req, permission);
   if (!auth.ok) return sendError(res, auth.status, auth.status === 401 ? 'Admin session required' : 'Permission denied');

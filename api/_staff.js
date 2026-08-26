@@ -44,6 +44,8 @@ function cleanStaff(row) {
     display_name: row.display_name,
     permissions: row.permissions || {},
     is_active: row.is_active !== false,
+    session_enabled: row.session_enabled !== false,
+    session_minutes: Number(row.session_minutes) || 60,
     created_at: row.created_at,
     updated_at: row.updated_at
   };
@@ -63,13 +65,15 @@ async function listStaff() {
   return (await supabase('/rest/v1/staff_accounts?select=*&order=created_at.desc')) || [];
 }
 
-async function createStaff({ phone, display_name, password, permissions }) {
+async function createStaff({ phone, display_name, password, permissions, session_enabled = true, session_minutes = 60 }) {
   const normalized = normalizePhone(phone);
   if (!validPhone(normalized)) throw Object.assign(new Error('INVALID_PHONE'), { status: 400 });
   if (typeof password !== 'string' || password.length < 8 || password.length > 128) throw Object.assign(new Error('INVALID_PASSWORD'), { status: 400 });
   if (!String(display_name || '').trim()) throw Object.assign(new Error('INVALID_NAME'), { status: 400 });
   const existing = await findByPhone(normalized);
   if (existing) throw Object.assign(new Error('STAFF_EXISTS'), { status: 409 });
+  const minutes = Number(session_minutes);
+  if (!Number.isInteger(minutes) || minutes < 15 || minutes > 43200) throw Object.assign(new Error('INVALID_SESSION_MINUTES'), { status: 400 });
 
   const email = loginEmail(normalized);
   const user = await authAdmin('', 'POST', {
@@ -86,7 +90,9 @@ async function createStaff({ phone, display_name, password, permissions }) {
       display_name: String(display_name).trim(),
       login_email: email,
       permissions: permissions || {},
-      is_active: true
+      is_active: true,
+      session_enabled: session_enabled !== false,
+      session_minutes: minutes
     });
     const row = rows?.[0];
     if (row?.id) {
@@ -113,6 +119,12 @@ async function updateStaff(id, patch) {
   }
   if (patch.permissions !== undefined) next.permissions = patch.permissions && typeof patch.permissions === 'object' ? patch.permissions : {};
   if (patch.is_active !== undefined) next.is_active = Boolean(patch.is_active);
+  if (patch.session_enabled !== undefined) next.session_enabled = Boolean(patch.session_enabled);
+  if (patch.session_minutes !== undefined) {
+    const minutes = Number(patch.session_minutes);
+    if (!Number.isInteger(minutes) || minutes < 15 || minutes > 43200) throw Object.assign(new Error('INVALID_SESSION_MINUTES'), { status: 400 });
+    next.session_minutes = minutes;
+  }
   if (Object.keys(next).length) await supabase(`/rest/v1/staff_accounts?id=eq.${encodeURIComponent(id)}`, 'PATCH', next, 'return=minimal');
 
   const authPatch = {};

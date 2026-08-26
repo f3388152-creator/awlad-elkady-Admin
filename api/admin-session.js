@@ -42,12 +42,30 @@ function getPermissions(user) {
 function hasPermission(user, permission) {
   if (isPrimaryAdmin(user)) return true;
   const permissions = getPermissions(user);
-  return permissions[permission] === true;
+  const required = Array.isArray(permission) ? permission : [permission];
+  return required.length > 0 && required.every(name => permissions[name] === true);
+}
+
+async function isActiveStaff(user) {
+  if (!user || user.app_metadata?.role !== 'staff' || !user.app_metadata?.staff_id || !SUPABASE_URL || !SERVICE_ROLE_KEY) return false;
+  try {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/staff_accounts?select=id,auth_user_id,is_active&id=eq.${encodeURIComponent(String(user.app_metadata.staff_id))}&limit=1`, {
+      headers: { apikey: SERVICE_ROLE_KEY, Authorization: `Bearer ${SERVICE_ROLE_KEY}` }
+    });
+    if (!response.ok) return false;
+    const rows = await response.json();
+    const row = rows?.[0];
+    return Boolean(row && row.is_active !== false && String(row.auth_user_id) === String(user.id));
+  } catch (_) {
+    return false;
+  }
 }
 
 async function isAdmin(req) {
   const user = await getSessionUser(req);
-  return Boolean(user && (isPrimaryAdmin(user) || user.app_metadata?.role === 'staff'));
+  if (!user) return false;
+  if (isPrimaryAdmin(user)) return true;
+  return isActiveStaff(user);
 }
 
 async function isOwner(req) {
@@ -57,9 +75,8 @@ async function isOwner(req) {
 
 async function authorize(req, permission) {
   const user = await getSessionUser(req);
-  if (!user || !(isPrimaryAdmin(user) || user.app_metadata?.role === 'staff')) {
-    return { ok: false, status: 401, user: null };
-  }
+  if (!user) return { ok: false, status: 401, user: null };
+  if (!isPrimaryAdmin(user) && !(await isActiveStaff(user))) return { ok: false, status: 401, user: null };
   if (!hasPermission(user, permission)) return { ok: false, status: 403, user };
   return { ok: true, status: 200, user };
 }

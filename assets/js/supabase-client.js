@@ -4,6 +4,27 @@
  *  Provides: select, insert, insertReturn, update, delete, upload
  * ==========================================
  */
+let adminRefreshPromise = null;
+
+async function refreshAdminSession() {
+  if (!adminRefreshPromise) {
+    adminRefreshPromise = fetch('/api/admin-refresh', { method: 'POST', credentials: 'include' })
+      .then(response => response.ok)
+      .catch(() => false)
+      .finally(() => { adminRefreshPromise = null; });
+  }
+  return adminRefreshPromise;
+}
+
+window.adminFetch = async function adminFetch(url, options = {}) {
+  const requestOptions = { ...options, credentials: 'include' };
+  let response = await fetch(url, requestOptions);
+  if (response.status !== 401 || String(url).includes('/api/admin-refresh')) return response;
+  const refreshed = await refreshAdminSession();
+  if (!refreshed) return response;
+  return fetch(url, requestOptions);
+};
+
 const Supabase = {
   get url() { return SUPABASE_CONFIG.url; },
   get key() { return SUPABASE_CONFIG.anonKey; },
@@ -46,7 +67,7 @@ const Supabase = {
 
   async select(table, query = '') {
     if (window.ADMIN_API) {
-      const res = await fetch(`/api/admin?table=${encodeURIComponent(table)}&action=select&query=${encodeURIComponent(query)}`, { credentials: 'include' });
+      const res = await window.adminFetch(`/api/admin?table=${encodeURIComponent(table)}&action=select&query=${encodeURIComponent(query)}`);
       if (!res.ok) throw new Error(`[Admin select:${table}] ${await res.text()}`);
       return res.json();
     }
@@ -64,7 +85,7 @@ const Supabase = {
   // ── INSERT (return=minimal) ───────────────────────────────────
   async insert(table, data) {
     if (window.ADMIN_API) {
-      const res = await fetch(`/api/admin?table=${encodeURIComponent(table)}&action=insert`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+      const res = await window.adminFetch(`/api/admin?table=${encodeURIComponent(table)}&action=insert`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
       if (!res.ok) throw new Error(`[Admin insert:${table}] ${await res.text()}`);
       return true;
     }
@@ -83,8 +104,8 @@ const Supabase = {
   // ── INSERT and get back the created row ───────────────────────
   async insertReturn(table, data) {
     if (window.ADMIN_API) {
-      const res = await fetch(`/api/admin?table=${encodeURIComponent(table)}&action=insertReturn`, {
-        method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
+      const res = await window.adminFetch(`/api/admin?table=${encodeURIComponent(table)}&action=insertReturn`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
       });
       if (!res.ok) throw new Error(`[Admin insertReturn:${table}] ${await res.text()}`);
       const rows = await res.json();
@@ -103,7 +124,7 @@ const Supabase = {
   // ── UPDATE ────────────────────────────────────────────────────
   async update(table, id, data) {
     if (window.ADMIN_API) {
-      const res = await fetch(`/api/admin?table=${encodeURIComponent(table)}&action=update&id=${encodeURIComponent(id)}`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+      const res = await window.adminFetch(`/api/admin?table=${encodeURIComponent(table)}&action=update&id=${encodeURIComponent(id)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
       if (!res.ok) throw new Error(`[Admin update:${table}] ${await res.text()}`);
       return true;
     }
@@ -122,7 +143,7 @@ const Supabase = {
   // ── DELETE ────────────────────────────────────────────────────
   async delete(table, id) {
     if (window.ADMIN_API) {
-      const res = await fetch(`/api/admin?table=${encodeURIComponent(table)}&action=delete&id=${encodeURIComponent(id)}`, { method: 'DELETE', credentials: 'include' });
+      const res = await window.adminFetch(`/api/admin?table=${encodeURIComponent(table)}&action=delete&id=${encodeURIComponent(id)}`, { method: 'DELETE' });
       if (!res.ok) throw new Error(`[Admin delete:${table}] ${await res.text()}`);
       return true;
     }
@@ -151,8 +172,8 @@ const Supabase = {
         reader.onerror = () => reject(new Error('تعذر قراءة الصورة'));
         reader.readAsDataURL(file);
       });
-      const res = await fetch(`/api/admin-upload?bucket=${encodeURIComponent(bucket)}`, {
-        method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+      const res = await window.adminFetch(`/api/admin-upload?bucket=${encodeURIComponent(bucket)}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mimeType: file.type, originalName: file.name, contentBase64: dataUrl })
       });
       if (!res.ok) throw new Error(`[Admin upload:${bucket}] ${await res.text()}`);
@@ -175,8 +196,8 @@ const Supabase = {
 
   async replaceProductCategories(productId, categoryIds) {
     if (!window.ADMIN_API) throw new Error('ربط الأقسام متاح من لوحة الإدارة فقط');
-    const res = await fetch(`/api/admin?table=product_categories&action=replace_product_categories&id=${encodeURIComponent(productId)}`, {
-      method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+    const res = await window.adminFetch(`/api/admin?table=product_categories&action=replace_product_categories&id=${encodeURIComponent(productId)}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ category_ids: categoryIds })
     });
     if (!res.ok) throw new Error(`[Admin product_categories] ${await res.text()}`);

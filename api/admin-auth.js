@@ -42,10 +42,20 @@ module.exports = async (req, res) => {
       'HttpOnly',
       'Path=/',
       'SameSite=Strict',
-      `Max-Age=${Math.min(data.expires_in || 3600, 3600)}`
+      `Max-Age=${Math.min(Number(data.expires_in) || 3600, 3600)}`
     ];
-    if (secure) cookie.push('Secure');
-    res.setHeader('Set-Cookie', cookie.join('; '));
+    const refreshCookie = [
+      `admin_refresh=${encodeURIComponent(data.refresh_token || '')}`,
+      'HttpOnly',
+      'Path=/',
+      'SameSite=Strict',
+      'Max-Age=2592000'
+    ];
+    if (secure) {
+      cookie.push('Secure');
+      refreshCookie.push('Secure');
+    }
+    res.setHeader('Set-Cookie', [cookie.join('; '), refreshCookie.join('; ')]);
     return res.status(200).json({ ok: true });
   } catch (_) {
     return res.status(500).json({ error: 'Authentication failed' });

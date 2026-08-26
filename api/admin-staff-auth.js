@@ -18,12 +18,15 @@ module.exports = async (req, res) => {
     });
     const data = await auth.json();
     if (!auth.ok || !data.access_token) return res.status(401).json({ error: 'Invalid credentials' });
-    if (data.user?.app_metadata?.role !== 'staff' || data.user?.app_metadata?.staff_id !== staff.id) return res.status(403).json({ error: 'Invalid staff account' });
+    if (data.user?.app_metadata?.role !== 'staff' || String(data.user?.app_metadata?.staff_id) !== String(staff.id)) return res.status(403).json({ error: 'Invalid staff account' });
 
     const secure = req.headers['x-forwarded-proto'] === 'https' || process.env.NODE_ENV === 'production';
-    const cookie = [`admin_session=${data.access_token}`, 'HttpOnly', 'Path=/', 'SameSite=Strict', `Max-Age=${Math.min(data.expires_in || 3600, 3600)}`];
+    const cookie = [`admin_session=${data.access_token}`, 'HttpOnly', 'Path=/', 'SameSite=Strict'];
+    if (staff.session_enabled !== false) cookie.push(`Max-Age=${Math.min(Math.max(Number(staff.session_minutes) || 60, 15) * 60, Number(data.expires_in) || 3600)}`);
     if (secure) cookie.push('Secure');
-    res.setHeader('Set-Cookie', cookie.join('; '));
+    const refreshCookie = [`admin_refresh=${encodeURIComponent(data.refresh_token || '')}`, 'HttpOnly', 'Path=/', 'SameSite=Strict', 'Max-Age=2592000'];
+    if (secure) refreshCookie.push('Secure');
+    res.setHeader('Set-Cookie', [cookie.join('; '), refreshCookie.join('; ')]);
     return res.status(200).json({ ok: true, role: 'staff', display_name: staff.display_name, permissions: staff.permissions || {} });
   } catch (_) {
     return res.status(500).json({ error: 'Authentication failed' });
