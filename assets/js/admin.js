@@ -56,7 +56,7 @@ window.sb_insert = async (table, data) => {
 
 window.sb_update = async (table, id, data) => {
     let payload = data;
-    if (table === 'products') payload = {name: data.name, sku: data.sku || '', price: Number(data.price) || 0, sale_price: data.salePrice ? Number(data.salePrice) : null, stock: Number(data.stock) || 0, stock_threshold: Number(data.stockThreshold) || 5, bosta_size: Number(data.bostaSize) || 0, category: data.category || '', is_bestseller: !!data.bestseller, description: data.desc || '', images: data.images || []};
+    if (table === 'products') payload = {name: data.name, sku: data.sku || '', price: Number(data.price) || 0, sale_price: data.salePrice ? Number(data.salePrice) : null, stock: Number(data.stock) || 0, stock_threshold: Number(data.stockThreshold) || 5, bosta_size: Number(data.bostaSize) || 0, is_bestseller: !!data.bestseller, description: data.desc || '', images: data.images || []};
     if (table === 'products_visibility') { await Supabase.update('products', id, {is_active: data.is_active}); return true; }
     if (table === 'categories') payload = {name: data.name, description: data.desc || '', is_visible: data.is_visible !== false};
     if (table === 'complaints') payload = {status: data.status};
