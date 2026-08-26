@@ -71,6 +71,7 @@ function initPasswordAuth() {
     const loginForm = document.getElementById('login-form');
     const loginScreen = document.getElementById('login-screen');
     const pwdInput = document.getElementById('password-only');
+    const staffPhoneInput = document.getElementById('staff-phone-login');
     const loginError = document.getElementById('login-error');
     const dashboard = document.getElementById('dashboard');
 
@@ -82,9 +83,10 @@ function initPasswordAuth() {
             if (!password) return;
             if (submitBtn) submitBtn.disabled = true;
             try {
-                const response = await fetch('/api/admin-auth', {
+                const staffPhone = staffPhoneInput?.value?.trim() || '';
+                const response = await fetch(staffPhone ? '/api/admin-staff-auth' : '/api/admin-auth', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include', body: JSON.stringify({ password })
+                    credentials: 'include', body: JSON.stringify(staffPhone ? { phone: staffPhone, password } : { password })
                 });
                 let details = {};
                 try { details = await response.json(); } catch (_) { /* non-JSON response */ }
@@ -95,6 +97,7 @@ function initPasswordAuth() {
                 }
                 loginScreen.classList.add('unlocked');
                 dashboard.classList.remove('hidden');
+                await hydrateAdminSession();
                 await startProtectedSystems();
             } catch (error) {
                 loginError.textContent = error.status === 503
@@ -103,6 +106,7 @@ function initPasswordAuth() {
                         ? 'الحساب غير مصرح له كمدير.'
                         : 'كلمة المرور غير صحيحة.';
                 if (pwdInput) { pwdInput.value = ''; pwdInput.focus(); }
+                if (staffPhoneInput) staffPhoneInput.value = '';
                 console.error('[admin-auth]', error.status || 'network', error.message);
             } finally {
                 if (submitBtn) submitBtn.disabled = false;
@@ -117,16 +121,128 @@ function initPasswordAuth() {
             loginScreen.classList.remove('unlocked');
             dashboard.classList.add('hidden');
             if (pwdInput) pwdInput.value = '';
+            if (staffPhoneInput) staffPhoneInput.value = '';
             if (loginError) loginError.textContent = '';
         });
-        fetch('/api/admin-check', { credentials: 'include' }).then(response => {
+        fetch('/api/admin-check', { credentials: 'include' }).then(async response => {
             if (response.ok) {
+                window.ADMIN_SESSION = await response.json();
+                applySessionPermissions();
                 loginScreen.classList.add('unlocked');
                 dashboard.classList.remove('hidden');
                 startProtectedSystems();
             }
         }).catch(() => {});
     }
+}
+
+let staffManagementStarted = false;
+window.ADMIN_SESSION = window.ADMIN_SESSION || null;
+window.staffCache = [];
+
+function can(permission) {
+    const session = window.ADMIN_SESSION || {};
+    return session.owner === true || session.permissions?.['*'] === true || session.permissions?.[permission] === true;
+}
+
+function applySessionPermissions() {
+    const session = window.ADMIN_SESSION || {};
+    const navPermissions = { orders: 'orders.view', products: 'products.view', categories: 'categories.view', complaints: 'complaints.view', settings: 'landing.view' };
+    document.querySelectorAll('.nav-item[data-target]').forEach(item => {
+        const permission = navPermissions[item.dataset.target];
+        if (permission) item.hidden = !can(permission);
+    });
+    const panel = document.getElementById('staff-management-panel');
+    if (panel) panel.hidden = session.owner !== true;
+    if (session.owner === true) initStaffManagement();
+}
+
+async function hydrateAdminSession() {
+    try {
+        const response = await fetch('/api/admin-check', { credentials: 'include' });
+        if (!response.ok) throw new Error('SESSION_FAILED');
+        window.ADMIN_SESSION = await response.json();
+        applySessionPermissions();
+    } catch (error) {
+        console.error('[admin-session]', error);
+    }
+}
+
+function staffPermissionsFromForm() {
+    const permissions = {};
+    document.querySelectorAll('[data-staff-permission]').forEach(input => { if (input.checked) permissions[input.dataset.staffPermission] = true; });
+    return permissions;
+}
+
+function fillStaffPermissions(permissions = {}) {
+    document.querySelectorAll('[data-staff-permission]').forEach(input => { input.checked = permissions[input.dataset.staffPermission] === true; });
+}
+
+function resetStaffForm() {
+    const form = document.getElementById('staff-form');
+    form?.reset();
+    const id = document.getElementById('staff-id'); if (id) id.value = '';
+    const active = document.getElementById('staff-active'); if (active) active.checked = true;
+    fillStaffPermissions({});
+}
+
+window.editStaff = function(id) {
+    const staff = window.staffCache.find(row => String(row.id) === String(id));
+    if (!staff) return;
+    document.getElementById('staff-id').value = staff.id;
+    document.getElementById('staff-phone').value = staff.phone || '';
+    document.getElementById('staff-phone').disabled = true;
+    document.getElementById('staff-name').value = staff.display_name || '';
+    document.getElementById('staff-password').value = '';
+    document.getElementById('staff-active').checked = staff.is_active !== false;
+    fillStaffPermissions(staff.permissions || {});
+    document.getElementById('staff-management-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
+
+window.toggleStaff = async function(id, active) {
+    const response = await fetch(`/api/admin-staff?id=${encodeURIComponent(id)}`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_active: active }) });
+    if (!response.ok) return alert('تعذر تغيير حالة الموظف.');
+    await loadStaffList();
+};
+
+function renderStaffList(rows) {
+    const target = document.getElementById('staff-list');
+    if (!target) return;
+    if (!rows.length) { target.innerHTML = '<p class="text-subtle">لا يوجد موظفون مضافون حالياً.</p>'; return; }
+    target.innerHTML = `<div class="table-responsive"><table class="data-table"><thead><tr><th>الاسم</th><th>الموبايل</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody>${rows.map(row => `<tr><td>${safeText(row.display_name)}</td><td dir="ltr">${safeText(row.phone)}</td><td>${row.is_active === false ? '<span class="status-badge status-danger">موقوف</span>' : '<span class="status-badge status-success">نشط</span>'}</td><td><button class="btn btn-secondary btn-sm" type="button" onclick="editStaff('${safeText(row.id)}')">تعديل</button><button class="btn btn-secondary btn-sm" type="button" onclick="toggleStaff('${safeText(row.id)}', ${row.is_active === false})">${row.is_active === false ? 'تفعيل' : 'إيقاف'}</button></td></tr>`).join('')}</tbody></table></div>`;
+}
+
+async function loadStaffList() {
+    const target = document.getElementById('staff-list');
+    if (!target || window.ADMIN_SESSION?.owner !== true) return;
+    try {
+        const response = await fetch('/api/admin-staff', { credentials: 'include' });
+        if (!response.ok) throw new Error('STAFF_LIST_FAILED');
+        window.staffCache = await response.json();
+        renderStaffList(window.staffCache);
+    } catch (error) {
+        target.innerHTML = '<p class="text-danger">تعذر تحميل الموظفين.</p>';
+        console.error('[staff-list]', error);
+    }
+}
+
+function initStaffManagement() {
+    if (staffManagementStarted) return;
+    staffManagementStarted = true;
+    const form = document.getElementById('staff-form');
+    document.getElementById('staff-reset-btn')?.addEventListener('click', () => { resetStaffForm(); document.getElementById('staff-phone').disabled = false; });
+    form?.addEventListener('submit', async event => {
+        event.preventDefault();
+        const id = document.getElementById('staff-id')?.value;
+        const payload = { phone: document.getElementById('staff-phone')?.value, display_name: document.getElementById('staff-name')?.value, password: document.getElementById('staff-password')?.value, is_active: document.getElementById('staff-active')?.checked, permissions: staffPermissionsFromForm() };
+        if (id && !payload.password) delete payload.password;
+        const response = await fetch(id ? `/api/admin-staff?id=${encodeURIComponent(id)}` : '/api/admin-staff', { method: id ? 'PATCH' : 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        if (!response.ok) { let data = {}; try { data = await response.json(); } catch (_) {} return alert(data.error || 'تعذر حفظ الموظف.'); }
+        resetStaffForm();
+        document.getElementById('staff-phone').disabled = false;
+        await loadStaffList();
+    });
+    loadStaffList();
 }
 
 async function startProtectedSystems() {

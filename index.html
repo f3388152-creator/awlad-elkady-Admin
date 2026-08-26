@@ -27,6 +27,12 @@
             <p class="login-subtitle">سجّل الدخول بحساب الإدارة المصرّح به</p>
 
             <form id="login-form">
+                <div class="form-group mb-3">
+                    <div class="input-icon-wrapper" style="position: relative;">
+                        <i class="fa-solid fa-mobile-screen-button input-icon" style="position: absolute; right: 1rem; top: 50%; transform: translateY(-50%);"></i>
+                        <input type="tel" id="staff-phone-login" class="form-control text-center" inputmode="numeric" placeholder="رقم الموظف (اتركه فارغاً للمالك)" autocomplete="username" style="padding-right: 2.5rem;">
+                    </div>
+                </div>
                 <div class="form-group mb-4">
                     <div class="input-icon-wrapper" style="position: relative;">
                         <i class="fa-solid fa-lock input-icon"
@@ -442,6 +448,21 @@
                     <div id="admin-settings-pane" class="settings-scope-pane hidden">
                         <div class="settings-container glass-panel admin-settings-panel">
                             <h3 class="tab-heading"><i class="fa-solid fa-sliders text-primary"></i> إعدادات لوحة الإدارة</h3>
+                            <div id="staff-management-panel" class="staff-management-panel" hidden>
+                                <div class="panel-heading-row"><div><h4><i class="fa-solid fa-users-gear text-primary"></i> إدارة الموظفين</h4><p class="text-subtle text-sm">إنشاء حسابات منفصلة برقم الموبايل وتحديد كل صلاحية بشكل مستقل.</p></div></div>
+                                <form id="staff-form" class="form-grid cols-2 mb-3">
+                                    <input type="hidden" id="staff-id">
+                                    <div class="form-group"><label for="staff-phone">رقم موبايل الموظف</label><input id="staff-phone" class="form-control" inputmode="numeric" placeholder="01xxxxxxxxx" required></div>
+                                    <div class="form-group"><label for="staff-name">اسم الموظف</label><input id="staff-name" class="form-control" required></div>
+                                    <div class="form-group"><label for="staff-password">كلمة السر <span class="text-subtle">(8 أحرف على الأقل)</span></label><input id="staff-password" type="password" class="form-control" minlength="8" autocomplete="new-password"></div>
+                                    <div class="form-group"><label for="staff-active">الحالة</label><label class="switch-toggle"><input id="staff-active" type="checkbox" checked><span class="slider"></span></label></div>
+                                    <div class="staff-permissions-grid form-grid cols-2" style="grid-column:1/-1">
+                                        <label><input type="checkbox" data-staff-permission="orders.view"> مشاهدة الطلبات</label><label><input type="checkbox" data-staff-permission="orders.update_status"> تغيير حالة الطلب</label><label><input type="checkbox" data-staff-permission="orders.update_customer"> تعديل بيانات العميل</label><label><input type="checkbox" data-staff-permission="orders.export"> تصدير الطلبات</label><label><input type="checkbox" data-staff-permission="products.view"> مشاهدة المنتجات</label><label><input type="checkbox" data-staff-permission="products.create"> إضافة منتجات</label><label><input type="checkbox" data-staff-permission="products.update"> تعديل المنتجات والمخزون</label><label><input type="checkbox" data-staff-permission="products.delete"> حذف/إخفاء المنتجات</label><label><input type="checkbox" data-staff-permission="products.upload"> رفع صور المنتجات</label><label><input type="checkbox" data-staff-permission="categories.view"> مشاهدة الأقسام</label><label><input type="checkbox" data-staff-permission="categories.create"> إضافة الأقسام</label><label><input type="checkbox" data-staff-permission="categories.update"> تعديل الأقسام</label><label><input type="checkbox" data-staff-permission="categories.assign"> ربط المنتجات بالأقسام</label><label><input type="checkbox" data-staff-permission="complaints.view"> مشاهدة الشكاوى</label><label><input type="checkbox" data-staff-permission="complaints.update_status"> تغيير حالة الشكوى</label><label><input type="checkbox" data-staff-permission="landing.view"> مشاهدة إعدادات الهبوط</label><label><input type="checkbox" data-staff-permission="landing.edit"> تعديل إعدادات الهبوط العامة</label><label><input type="checkbox" data-staff-permission="landing.edit_identity"> تعديل الهوية والـSEO</label><label><input type="checkbox" data-staff-permission="landing.edit_content"> تعديل محتوى الهيرو والكتالوج</label><label><input type="checkbox" data-staff-permission="landing.edit_contact"> تعديل التواصل والسوشيال</label><label><input type="checkbox" data-staff-permission="landing.edit_faq"> تعديل الأسئلة الشائعة</label><label><input type="checkbox" data-staff-permission="landing.edit_shipping"> تعديل الشحن</label><label><input type="checkbox" data-staff-permission="landing.edit_bosta"> تعديل إعدادات Bosta</label><label><input type="checkbox" data-staff-permission="landing.edit_maintenance"> تعديل الصيانة</label><label><input type="checkbox" data-staff-permission="bosta.create"> إنشاء/إعادة محاولة شحنة Bosta</label>
+                                    </div>
+                                    <div class="form-actions" style="grid-column:1/-1"><button type="submit" class="btn btn-primary">حفظ الموظف</button><button type="button" class="btn btn-secondary" id="staff-reset-btn">مسح النموذج</button></div>
+                                </form>
+                                <div id="staff-list" class="staff-list"><p class="text-subtle">جاري تحميل الموظفين…</p></div>
+                            </div>
                             <div class="form-grid cols-2 mb-3">
                                 <div class="form-group"><label>مدة الجلسة بالدقائق</label><input type="number" min="15" max="1440" id="admin-session-minutes" class="form-control" value="60"></div>
                                 <div class="form-group"><label>عدد العناصر في كل صفحة</label><select id="admin-page-size" class="form-control"><option value="12">12</option><option value="24">24</option><option value="48">48</option></select></div>
