@@ -87,9 +87,11 @@ module.exports = async (req, res) => {
     res.setHeader('Set-Cookie', [accessCookie, refreshCookie]);
     return res.status(200).json({
       ok: true,
+      admin: true,
+      owner: isPrimaryAdmin(user),
       role: staff ? 'staff' : 'admin',
       display_name: staff ? cleanStaff(staff).display_name : (user.user_metadata?.display_name || user.email || ''),
-      permissions: staff ? cleanStaff(staff).permissions : {}
+      permissions: staff ? cleanStaff(staff).permissions : { '*': true }
     });
   } catch (_) {
     res.setHeader('Set-Cookie', clearCookies(secure));

@@ -1,4 +1,5 @@
-const { token, authorize, SERVICE_ROLE_KEY, SUPABASE_URL } = require('../lib/admin-session');
+const { token, authorize, isPrimaryAdmin, SERVICE_ROLE_KEY, SUPABASE_URL } = require('../lib/admin-session');
+const { terminateBostaDelivery, deleteBostaPickup } = require('../lib/_server');
 
 const ALLOWED_TABLES = new Set([
   'products', 'categories', 'product_categories', 'orders', 'complaints',
@@ -72,6 +73,15 @@ async function upstream(path, method, req, body, prefer = 'return=minimal') {
   });
   const text = await response.text();
   return { response, text };
+}
+
+async function saveArchiveEvent(req, payload) {
+  const result = await upstream('/rest/v1/archive_events', 'POST', req, payload, 'return=minimal');
+  if (result.response.ok) return;
+  const error = new Error('ARCHIVE_AUDIT_FAILED');
+  error.status = 502;
+  error.data = result.text;
+  throw error;
 }
 
 module.exports = async (req, res) => {
@@ -161,6 +171,128 @@ module.exports = async (req, res) => {
     } catch (error) {
       console.error('[review-customer-request]', error.message);
       return sendError(res, 500, 'تعذر مراجعة طلب العميل');
+    }
+  }
+
+  if (action === 'cancel_bosta_delivery' || action === 'cancel_bosta_pickup') {
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const orderId = Number(body.order_id || id);
+    const reason = String(body.reason || '').trim().slice(0, 1000);
+    const confirmed = body.confirm === true;
+    if (!Number.isInteger(orderId) || orderId <= 0) return sendError(res, 400, 'رقم الطلب غير صحيح.');
+    if (!reason || reason.length < 5) return sendError(res, 422, 'سبب الإلغاء إجباري، ولا يقل عن 5 أحرف.');
+    if (!confirmed) return sendError(res, 422, 'التأكيد الصريح مطلوب قبل تنفيذ إلغاء Bosta.');
+    const requiredPermission = action === 'cancel_bosta_delivery' ? 'bosta.cancel_delivery' : 'bosta.cancel_pickup';
+    const auth = await authorize(req, requiredPermission);
+    if (!auth.ok) return sendError(res, auth.status, auth.status === 401 ? 'Admin session required' : 'Permission denied');
+    if (action === 'cancel_bosta_pickup' && !isPrimaryAdmin(auth.user)) return sendError(res, 403, 'إلغاء Pickup متاح للمالك فقط لأنه يلغي الدفعة كلها.');
+
+    try {
+      const orderResult = await upstream(`/rest/v1/orders?id=eq.${orderId}&select=*`, 'GET', req, undefined, '');
+      if (!orderResult.response.ok) { res.status(orderResult.response.status); return orderResult.text ? res.send(orderResult.text) : res.end(); }
+      const order = JSON.parse(orderResult.text || '[]')?.[0];
+      if (!order) return sendError(res, 404, 'الطلب غير موجود.');
+      const terminalStatuses = new Set(['ملغي', 'مرفوض', 'مرتجع', 'تم التسليم']);
+      if (action === 'cancel_bosta_delivery') {
+        if (terminalStatuses.has(String(order.status || ''))) return sendError(res, 409, 'الطلب في حالة نهائية ولا يحتاج إلغاء شحنة.');
+        const deliveryId = String(body.bosta_delivery_id || '').trim();
+        if (!deliveryId || deliveryId !== String(order.bosta_delivery_id || '').trim()) return sendError(res, 409, 'أدخل Delivery ID المطابق المحفوظ لهذا الأوردر؛ رقم التتبع وحده غير كافٍ للإلغاء الآمن.');
+        try {
+          await terminateBostaDelivery(deliveryId);
+        } catch (error) {
+          console.error('[cancel-bosta-delivery]', error.message, error.data || '');
+          await upstream(`/rest/v1/orders?id=eq.${orderId}`, 'PATCH', req, { bosta_sync_status: 'cancel_failed', bosta_cancel_error: String(error.data?.message || error.data?.error || error.message).slice(0, 500), bosta_cancel_reason: reason });
+          return sendError(res, 502, 'Bosta لم تؤكد إلغاء الشحنة؛ لم يتم تغيير حالة الأوردر محلياً.');
+        }
+        const patched = await upstream(`/rest/v1/orders?id=eq.${orderId}`, 'PATCH', req, { status: 'ملغي', bosta_status: 'terminated', bosta_sync_status: order.bosta_pickup_id ? 'delivery_cancelled_pickup_review' : 'cancelled', bosta_cancelled_at: new Date().toISOString(), bosta_cancel_reason: reason, bosta_cancel_error: null, bosta_pickup_cancel_error: order.bosta_pickup_id ? 'Pickup جماعي محتمل؛ لم يتم إلغاؤه تلقائياً حتى لا تتأثر طرود أخرى.' : null });
+        if (!patched.response.ok) { res.status(502); return res.json({ error: 'تم تأكيد الإلغاء من Bosta لكن تعذر تحديث الأوردر محلياً؛ راجع السجل قبل أي إعادة محاولة.' }); }
+        await saveArchiveEvent(req, { entity_type: 'order', entity_id: orderId, action: 'bosta_cancel', reason, actor_user_id: auth.user?.id || null, actor_name: auth.user?.email || 'admin', bosta_sync_status: order.bosta_pickup_id ? 'delivery_cancelled_pickup_review' : 'cancelled', details: { delivery_id: deliveryId, pickup_id: order.bosta_pickup_id || null } });
+        return res.status(200).json({ ok: true, action, order_id: orderId, pickup_requires_review: Boolean(order.bosta_pickup_id) });
+      }
+
+      const pickupId = String(body.pickup_id || '').trim();
+      if (!isPrimaryAdmin(auth.user)) return sendError(res, 403, 'إلغاء Pickup متاح للمالك فقط لأنه يلغي الدفعة كلها.');
+      if (!pickupId || pickupId !== String(order.bosta_pickup_id || '').trim()) return sendError(res, 409, 'أدخل Pickup ID المطابق المحفوظ لهذا الأوردر.');
+      try {
+        await deleteBostaPickup(pickupId);
+      } catch (error) {
+        console.error('[cancel-bosta-pickup]', error.message, error.data || '');
+        await upstream(`/rest/v1/orders?id=eq.${orderId}`, 'PATCH', req, { bosta_pickup_cancel_error: String(error.data?.message || error.data?.error || error.message).slice(0, 500) });
+        return sendError(res, 502, 'Bosta لم تؤكد إلغاء Pickup؛ لم يتم حذف الرقم محلياً.');
+      }
+      const pickupPatch = await upstream(`/rest/v1/orders?id=eq.${orderId}`, 'PATCH', req, { bosta_pickup_id: null, bosta_pickup_cancelled_at: new Date().toISOString(), bosta_pickup_cancel_error: null, bosta_sync_status: 'pickup_cancelled' });
+      if (!pickupPatch.response.ok) { res.status(502); return res.json({ error: 'تم تأكيد إلغاء Pickup من Bosta لكن تعذر تحديث الأوردر محلياً.' }); }
+      await saveArchiveEvent(req, { entity_type: 'order', entity_id: orderId, action: 'bosta_cancel', reason, actor_user_id: auth.user?.id || null, actor_name: auth.user?.email || 'admin', bosta_sync_status: 'pickup_cancelled', details: { pickup_id: pickupId, warning: 'This cancels the Bosta pickup batch.' } });
+      return res.status(200).json({ ok: true, action, order_id: orderId });
+    } catch (error) {
+      console.error(`[${action}]`, error.message, error.data || '');
+      return sendError(res, error.status || 500, 'تعذر تنفيذ إلغاء Bosta حالياً.');
+    }
+  }
+
+  if (['archive_product', 'restore_product', 'archive_complaint', 'restore_complaint'].includes(action)) {
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const entityId = Number(body.id || id);
+    const reason = String(body.reason || '').trim().slice(0, 1000);
+    if (!Number.isInteger(entityId) || entityId <= 0) return sendError(res, 400, 'معرف العنصر غير صحيح.');
+    if (!reason || reason.length < 5) return sendError(res, 422, 'سبب الأرشفة أو الاسترجاع إجباري، ولا يقل عن 5 أحرف.');
+    const isProductAction = action.endsWith('_product');
+    const isRestore = action.startsWith('restore_');
+    const permission = isProductAction ? (isRestore ? 'products.view' : 'products.delete') : (isRestore ? 'complaints.view' : 'complaints.delete');
+    const auth = await authorize(req, permission);
+    if (!auth.ok) return sendError(res, auth.status, auth.status === 401 ? 'Admin session required' : 'Permission denied');
+    if (isRestore && !isPrimaryAdmin(auth.user)) return sendError(res, 403, 'استرجاع الأرشيف متاح للمالك فقط.');
+
+    try {
+      const tableName = isProductAction ? 'products' : 'complaints';
+      const existingResult = await upstream(`/rest/v1/${tableName}?id=eq.${encodeURIComponent(String(entityId))}&select=*`, 'GET', req, undefined, '');
+      if (!existingResult.response.ok) { res.status(existingResult.response.status); return existingResult.text ? res.send(existingResult.text) : res.end(); }
+      const existing = JSON.parse(existingResult.text || '[]')?.[0];
+      if (!existing) return sendError(res, 404, 'العنصر غير موجود.');
+
+      if (isRestore) {
+        const restored = await upstream(`/rest/v1/${tableName}?id=eq.${entityId}`, 'PATCH', req, { is_archived: false, archived_at: null, archived_by: null, archive_reason: null });
+        if (!restored.response.ok) { res.status(restored.response.status); return restored.text ? res.send(restored.text) : res.end(); }
+        try {
+          await saveArchiveEvent(req, { entity_type: isProductAction ? 'product' : 'complaint', entity_id: entityId, action: 'restore', reason, actor_user_id: auth.user?.id || null, actor_name: auth.user?.email || 'admin', details: {} });
+        } catch (auditError) {
+          await upstream(`/rest/v1/${tableName}?id=eq.${entityId}`, 'PATCH', req, { is_archived: existing.is_archived, archived_at: existing.archived_at, archived_by: existing.archived_by, archive_reason: existing.archive_reason });
+          throw auditError;
+        }
+        return res.status(200).json({ ok: true, action: 'restore', id: entityId });
+      }
+
+      if (existing.is_archived === true) return sendError(res, 409, 'العنصر مؤرشف بالفعل.');
+
+      if (isProductAction) {
+        const ordersResult = await upstream('/rest/v1/orders?select=id,status,bosta_delivery_id,bosta_tracking_number,items&limit=1000', 'GET', req, undefined, '');
+        if (!ordersResult.response.ok) { res.status(ordersResult.response.status); return ordersResult.text ? res.send(ordersResult.text) : res.end(); }
+        const orders = JSON.parse(ordersResult.text || '[]');
+        const terminalStatuses = new Set(['ملغي', 'مرفوض', 'مرتجع', 'تم التسليم']);
+        const affected = orders.filter(order => {
+          if (terminalStatuses.has(String(order.status || ''))) return false;
+          const items = Array.isArray(order.items) ? order.items : [];
+          return items.some(item => Number(item?.id || item?.product_id || item?.productId) === entityId);
+        });
+        if (affected.length) {
+          return sendError(res, 409, `لا يمكن أرشفة المنتج الآن؛ مرتبط بـ${affected.length} طلب مفتوح. الأرشفة لا تلغي شحنات Bosta أو Pickup جماعي تلقائياً؛ ألغِ الشحنة من إجراء الأوردر الصريح بعد المراجعة.`);
+        }
+      }
+
+      const patch = { is_archived: true, archived_at: new Date().toISOString(), archived_by: auth.user?.email || auth.user?.id || 'admin', archive_reason: reason };
+      if (isProductAction) patch.is_active = false;
+      const archived = await upstream(`/rest/v1/${tableName}?id=eq.${entityId}`, 'PATCH', req, patch);
+      if (!archived.response.ok) { res.status(archived.response.status); return archived.text ? res.send(archived.text) : res.end(); }
+      try {
+        await saveArchiveEvent(req, { entity_type: isProductAction ? 'product' : 'complaint', entity_id: entityId, action: 'archive', reason, actor_user_id: auth.user?.id || null, actor_name: auth.user?.email || 'admin', bosta_sync_status: isProductAction ? 'not_required_open_orders_checked' : null, details: { was_active_before_archive: isProductAction ? existing.is_active === true : null } });
+      } catch (auditError) {
+        await upstream(`/rest/v1/${tableName}?id=eq.${entityId}`, 'PATCH', req, { is_archived: false, archived_at: null, archived_by: null, archive_reason: null, ...(isProductAction ? { is_active: existing.is_active === true } : {}) });
+        throw auditError;
+      }
+      return res.status(200).json({ ok: true, action: 'archive', id: entityId });
+    } catch (error) {
+      console.error(`[${action}]`, error.message, error.data || '');
+      return sendError(res, error.status || 500, 'تعذر تنفيذ الأرشفة أو الاسترجاع حالياً.');
     }
   }
 

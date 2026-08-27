@@ -27,7 +27,8 @@ function normalizeProduct(p) {
         category: p.category || '', category_ids: p.category_ids || [], category_names: p.category_names || [],
         is_active: p.is_active !== false, bestseller: p.is_bestseller === true,
         desc: p.description || '', images: Array.isArray(p.images) ? p.images : [],
-        material: p.material || '', size: p.size || ''
+        material: p.material || '', size: p.size || '', is_archived: p.is_archived === true,
+        archived_at: p.archived_at || null, archived_by: p.archived_by || '', archive_reason: p.archive_reason || ''
     };
 }
 
@@ -36,9 +37,9 @@ window.sb_fetch = async (table) => {
         const query = table === 'site_settings' ? 'id=eq.1' : 'order=created_at.desc';
         const data = await Supabase.select(table, query);
         if (table === 'products') return data.map(normalizeProduct);
-        if (table === 'orders') return data.map(o => ({id: String(o.id), status: o.status, date: new Date(o.created_at).toLocaleDateString('ar-EG'), name: o.customer_name, phone: o.customer_phone, secondPhone: o.customer_second_phone, gov: o.governorate, area: o.area, address: o.address, subtotal: Number(o.subtotal) || 0, shipping: Number(o.shipping_fee) || 0, notes: o.notes, items: Array.isArray(o.items) ? o.items : [], tracking_number: o.bosta_tracking_number || o.tracking_number || '—', bosta_status: o.bosta_status || null, bosta_delivery_id: o.bosta_delivery_id || null}));
+        if (table === 'orders') return data.map(o => ({id: String(o.id), status: o.status, date: new Date(o.created_at).toLocaleDateString('ar-EG'), name: o.customer_name, phone: o.customer_phone, secondPhone: o.customer_second_phone, gov: o.governorate, area: o.area, address: o.address, subtotal: Number(o.subtotal) || 0, shipping: Number(o.shipping_fee) || 0, notes: o.notes, items: Array.isArray(o.items) ? o.items : [], tracking_number: o.bosta_tracking_number || o.tracking_number || '—', bosta_status: o.bosta_status || null, bosta_delivery_id: o.bosta_delivery_id || null, bosta_pickup_id: o.bosta_pickup_id || null, bosta_sync_status: o.bosta_sync_status || null}));
         if (table === 'order_customer_requests') return data.map(r => ({ id: String(r.id), orderId: String(r.order_id), type: r.request_type, reason: r.reason || '', changes: r.requested_changes && typeof r.requested_changes === 'object' ? r.requested_changes : {}, status: r.status || 'pending', createdAt: new Date(r.created_at).toLocaleString('ar-EG'), adminNote: r.admin_note || '' }));
-        if (table === 'complaints') return data.map(c => ({id: c.id, client: c.customer_name || '', phone: c.customer_phone || '', date: new Date(c.created_at).toLocaleDateString('ar-EG'), status: c.status || 'new', text: c.message || ''}));
+        if (table === 'complaints') return data.map(c => ({id: c.id, client: c.customer_name || '', phone: c.customer_phone || '', date: new Date(c.created_at).toLocaleDateString('ar-EG'), status: c.status || 'new', text: c.message || '', is_archived: c.is_archived === true, archived_at: c.archived_at || null, archived_by: c.archived_by || '', archive_reason: c.archive_reason || ''}));
         if (table === 'site_settings') return data.length ? [{...data[0], id: data[0].id}] : [];
         if (table === 'categories') return data.map(c => ({...c, desc: c.desc || c.description || ''}));
         if (table === 'faqs' || table === 'socials') return data.map(d => ({...d, visible: d.is_visible !== false}));
@@ -685,7 +686,7 @@ function renderOrders(orders) {
             : o.bosta_status === 'failed'
                 ? `<span class="text-danger text-sm block mt-1"><i class="fa-solid fa-triangle-exclamation"></i> فشل إنشاء بوليصة Bosta</span>`
                 : `<span class="text-subtle text-sm block mt-1 opacity-50">لا يوجد رقم بوليصة حتى الآن</span>`;
-        const bostaActions = o.tracking_number && o.tracking_number !== '—' ? `${can('bosta.print_awb') ? `<button class="btn btn-ghost btn-sm" onclick="printBostaAwb('${safeText(o.id)}','A4')"><i class="fa-solid fa-file-pdf"></i> طباعة AWB</button>` : ''}${can('bosta.pack') ? `<button class="btn btn-primary btn-sm" onclick="markOrderPacked('${safeText(o.id)}')"><i class="fa-solid fa-box"></i> تم التغليف</button>` : ''}` : '';
+        const bostaActions = o.tracking_number && o.tracking_number !== '—' ? `${can('bosta.print_awb') ? `<button class="btn btn-ghost btn-sm" onclick="printBostaAwb('${safeText(o.id)}','A4')"><i class="fa-solid fa-file-pdf"></i> طباعة AWB</button>` : ''}${can('bosta.pack') ? `<button class="btn btn-primary btn-sm" onclick="markOrderPacked('${safeText(o.id)}')"><i class="fa-solid fa-box"></i> تم التغليف</button>` : ''}${can('bosta.request_pickup') && !o.bosta_pickup_id ? `<button class="btn btn-secondary btn-sm" onclick="requestOrderBostaPickup('${safeText(o.id)}')"><i class="fa-solid fa-truck-ramp-box"></i> طلب المندوب</button>` : (o.bosta_pickup_id ? `<span class="badge badge-resolved">Pickup مطلوب</span>${can('bosta.cancel_pickup') && window.ADMIN_SESSION?.owner === true ? `<button class="btn btn-danger-ghost btn-sm" onclick="cancelBostaPickup('${safeText(o.id)}','${safeText(o.bosta_pickup_id)}')">إلغاء Pickup</button>` : ''}` : '')}${can('bosta.cancel_delivery') && o.bosta_delivery_id ? `<button class="btn btn-danger-ghost btn-sm" onclick="cancelBostaDelivery('${safeText(o.id)}','${safeText(o.bosta_delivery_id)}')"><i class="fa-solid fa-ban"></i> إلغاء الشحنة</button>` : ''}` : '';
 
         return `
             <div class="order-card glass-panel" data-idx="${idx}">
@@ -756,6 +757,49 @@ function nextBostaPickupDate() {
     const dd = String(date.getDate()).padStart(2, '0');
     return `${yyyy}-${mm}-${dd}`;
 }
+
+window.requestOrderBostaPickup = async function(orderId) {
+    if (!can('bosta.request_pickup')) return alert('ليس لديك صلاحية طلب استلام المندوب.');
+    const scheduledDate = window.prompt('اكتب تاريخ استلام المندوب بصيغة YYYY-MM-DD. يوم الجمعة غير مسموح.', nextBostaPickupDate());
+    if (scheduledDate === null) return;
+    try {
+        const response = await window.adminFetch('/api/bosta-create-delivery', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'request_pickup', order_id: orderId, scheduled_date: scheduledDate.trim(), number_of_parcels: 1 }) });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.ok) throw new Error(data.error || 'تعذر طلب استلام المندوب');
+        const order = sampleOrders.find(row => String(row.id) === String(orderId));
+        if (order) order.bosta_pickup_id = data.pickup_id || 'requested';
+        renderOrders(sampleOrders);
+        alert(`${data.message || 'تم إرسال طلب استلام المندوب إلى Bosta.'}${data.pickup_id ? `\nرقم طلب الاستلام: ${data.pickup_id}` : ''}`);
+    } catch (error) { alert(readableError(error, 'تعذر طلب استلام المندوب من Bosta حالياً.')); }
+};
+
+window.cancelBostaDelivery = async function(orderId, deliveryId) {
+    if (!can('bosta.cancel_delivery')) return alert('ليس لديك صلاحية إلغاء الشحنة.');
+    const reason = window.prompt('اكتب سبب إلغاء الشحنة (إجباري، 5 أحرف على الأقل):');
+    if (reason === null || reason.trim().length < 5) return alert('سبب الإلغاء إجباري ولا يقل عن 5 أحرف.');
+    if (!window.confirm('تأكيد: سيتم إلغاء شحنة Bosta وتغيير حالة الأوردر إلى ملغي. هل تريد المتابعة؟')) return;
+    try {
+        const response = await window.adminFetch(`/api/admin?action=cancel_bosta_delivery&id=${encodeURIComponent(orderId)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order_id: orderId, bosta_delivery_id: deliveryId, reason: reason.trim(), confirm: true }) });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || 'تعذر إلغاء الشحنة');
+        await refreshDashboardData();
+        alert(data.pickup_requires_review ? 'تم إلغاء الشحنة من Bosta. يوجد Pickup مرتبط يحتاج مراجعة المالك لأنه قد يكون Batch.' : 'تم إلغاء الشحنة وتحديث الأوردر.');
+    } catch (error) { alert(readableError(error, 'تعذر إلغاء الشحنة من Bosta حالياً.')); }
+};
+
+window.cancelBostaPickup = async function(orderId, pickupId) {
+    if (window.ADMIN_SESSION?.owner !== true) return alert('إلغاء Pickup متاح للمالك فقط.');
+    const reason = window.prompt('تنبيه: إلغاء Pickup يلغي دفعة الاستلام كلها وقد يؤثر على طرود أخرى. اكتب السبب:');
+    if (reason === null || reason.trim().length < 5) return alert('سبب الإلغاء إجباري ولا يقل عن 5 أحرف.');
+    if (!window.confirm('تأكيد نهائي: إلغاء Pickup من Bosta لكل الطرود داخل الدفعة؟')) return;
+    try {
+        const response = await window.adminFetch(`/api/admin?action=cancel_bosta_pickup&id=${encodeURIComponent(orderId)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order_id: orderId, pickup_id: pickupId, reason: reason.trim(), confirm: true }) });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || 'تعذر إلغاء Pickup');
+        await refreshDashboardData();
+        alert('تم تأكيد إلغاء Pickup من Bosta وتحديث السجل المحلي.');
+    } catch (error) { alert(readableError(error, 'تعذر إلغاء Pickup من Bosta حالياً.')); }
+};
 
 window.requestBostaPickup = async function() {
     if (!can('bosta.request_pickup')) return alert('ليس لديك صلاحية طلب استلام المندوب.');
@@ -844,19 +888,41 @@ async function initProductsAndCategories() {
     populateCategoryDropdowns();
     renderGalleryUploaderSlots([]);
 
-    // Product Search
+    // Product Filters & Search
     const searchProd = document.getElementById('search-products-input');
-    if (searchProd) {
-        searchProd.addEventListener('input', (e) => {
-            const q = e.target.value.toLowerCase();
-            const filtered = sampleProducts.filter(p => {
-                const values = [p.name, p.sku, p.category]
-                    .map(value => String(value || '').toLowerCase());
-                return values.some(value => value.includes(q));
-            });
-            renderProducts(filtered);
+    const filterActive = document.getElementById('filter-products-active');
+    const filterArchived = document.getElementById('filter-products-archived');
+    let currentProductFilter = 'active';
+
+    const applyProductFilters = () => {
+        const q = searchProd?.value?.toLowerCase() || '';
+        const filtered = sampleProducts.filter(p => {
+            const matchesSearch = [p.name, p.sku, p.category].some(v => String(v || '').toLowerCase().includes(q));
+            const matchesArchive = currentProductFilter === 'archived' ? p.is_archived : !p.is_archived;
+            return matchesSearch && matchesArchive;
+        });
+        renderProducts(filtered);
+    };
+
+    if (filterArchived) {
+        filterArchived.hidden = (window.ADMIN_SESSION?.owner !== true);
+        filterArchived.addEventListener('click', () => {
+            currentProductFilter = 'archived';
+            filterActive.classList.remove('active-filter');
+            filterArchived.classList.add('active-filter');
+            applyProductFilters();
         });
     }
+    if (filterActive) {
+        filterActive.addEventListener('click', () => {
+            currentProductFilter = 'active';
+            filterArchived.classList.remove('active-filter');
+            filterActive.classList.add('active-filter');
+            applyProductFilters();
+        });
+    }
+    if (searchProd) searchProd.addEventListener('input', applyProductFilters);
+    applyProductFilters();
 
     // Add Product Modal Trigger
     const openAddProductModalBtn = document.getElementById('open-add-product-modal');
@@ -995,19 +1061,23 @@ function renderProducts(products) {
         const mainImg = p.images?.find(i => i?.main)?.url || p.images?.[0]?.url || '';
         const thumbHtml = mainImg ? `<img src="${safeText(mainImg)}" alt="${safeText(p.name)}" style="width:100%;height:100%;object-fit:cover;border-radius:8px;">` : `<i class="fa-solid fa-box-open" style="font-size:2rem;color:var(--text-subtle)"></i>`;
         const sale = Number(p.salePrice) > 0 && Number(p.salePrice) < Number(p.price) ? Number(p.salePrice) : null;
-        return `<div class="product-card${p.is_active === false ? ' opacity-50' : ''}">
+        const archiveAction = p.is_archived
+            ? (window.ADMIN_SESSION?.owner === true ? `<button class="btn btn-primary btn-sm" onclick="restoreProduct(${Number(p.id)})"><i class="fa-solid fa-rotate-left"></i> استرجاع</button>` : '')
+            : (can('products.delete') ? `<button class="btn btn-danger-ghost btn-sm" onclick="archiveProduct(${Number(p.id)})"><i class="fa-solid fa-box-archive"></i> أرشفة</button>` : '');
+        const archiveMeta = p.is_archived ? `<p class="text-danger text-sm mb-2"><strong>مؤرشف:</strong> ${safeText(p.archive_reason || 'بدون سبب مسجل')} ${p.archived_by ? ` · بواسطة ${safeText(p.archived_by)}` : ''}</p>` : '';
+        return `<div class="product-card${p.is_active === false || p.is_archived ? ' opacity-50' : ''}">
             <div class="product-thumb-container" style="position:relative;background:#f1f5f2;border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center;min-height:120px;">${thumbHtml}
                 <div class="badge-overlay-container" style="position:absolute;top:6px;right:6px;display:flex;flex-direction:column;gap:4px;">
-                    ${!p.is_active ? '<span class="badge" style="background:#ef4444;color:#fff;">مخفي</span>' : ''}
+                    ${p.is_archived ? '<span class="badge" style="background:#7f1d1d;color:#fff;">مؤرشف</span>' : (!p.is_active ? '<span class="badge" style="background:#ef4444;color:#fff;">مخفي</span>' : '')}
                     ${p.bestseller ? '<span class="badge badge-resolved">الأكثر مبيعاً</span>' : ''}
                     ${isLowStock ? `<span class="badge badge-new"><i class="fa-solid fa-triangle-exclamation"></i> (${p.stock})</span>` : ''}
                 </div>
             </div>
             <div class="product-card-body"><span class="text-subtle text-sm block mb-1">${safeText(p.category)}</span><strong class="text-primary font-bold text-lg mb-1">${safeText(p.name)}</strong>
                 <span class="text-subtle text-sm mb-2">SKU: ${safeText(p.sku || '—')} | بوسطة: ${Number(p.bostaSize || 0)} ج</span>
-                <p class="text-subtle text-sm mb-3" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${safeText(p.desc || '')}</p>
+                <p class="text-subtle text-sm mb-3" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${safeText(p.desc || '')}</p>${archiveMeta}
                 <div class="flex-between mt-auto"><div><strong class="text-primary text-lg">${sale ?? Number(p.price || 0)} ج.م</strong>${sale ? `<span class="text-subtle text-sm" style="text-decoration:line-through;">${Number(p.price)} ج</span>` : ''}</div><span class="text-sm font-bold ${isLowStock ? 'text-danger' : 'text-emerald'}">${Number(p.stock)} قطعة</span></div>
-                <div class="product-card-actions"><button class="btn btn-ghost btn-sm" onclick="editProduct(${Number(p.id)})"><i class="fa-solid fa-pen"></i> تعديل</button><button class="btn btn-ghost btn-sm" title="${p.is_active ? 'إخفاء' : 'إظهار'}" onclick="toggleProductVisibility(${Number(p.id)}, ${!p.is_active})"><i class="fa-solid ${p.is_active ? 'fa-eye-slash' : 'fa-eye'}"></i></button><button class="btn btn-danger-ghost btn-sm" onclick="deleteProduct(${Number(p.id)})"><i class="fa-solid fa-trash"></i></button></div>
+                <div class="product-card-actions"><button class="btn btn-ghost btn-sm" onclick="editProduct(${Number(p.id)})"><i class="fa-solid fa-pen"></i> تعديل</button>${!p.is_archived ? `<button class="btn btn-ghost btn-sm" title="${p.is_active ? 'إخفاء' : 'إظهار'}" onclick="toggleProductVisibility(${Number(p.id)}, ${!p.is_active})"><i class="fa-solid ${p.is_active ? 'fa-eye-slash' : 'fa-eye'}"></i></button>` : ''}${archiveAction}</div>
             </div></div>`;
     }).join('');
 }
@@ -1104,14 +1174,24 @@ window.editProduct = function(id) {
     document.getElementById('product-modal').classList.remove('hidden');
 };
 
-window.deleteProduct = async function(id) {
-    if (!confirm('هيتم إخفاء المنتج من صفحة الهبوط للحفاظ على الطلبات والسلال القديمة. موافق؟')) return;
+async function archiveEntity(action, id, label) {
+    const reason = window.prompt(`اكتب سبب ${label} (إجباري، 5 أحرف على الأقل):`, 'لم يعد متاحاً للبيع');
+    if (reason === null) return;
+    if (reason.trim().length < 5) return alert('السبب إجباري ولا يقل عن 5 أحرف.');
     try {
-        await Supabase.update('products', id, { is_active: false });
-        sampleProducts = await sb_fetch('products') || [];
-        renderProducts(sampleProducts);
-    } catch(e) { alert('خطأ في الحذف: ' + e.message); }
-};
+        const response = await window.adminFetch(`/api/admin?action=${action}&id=${encodeURIComponent(id)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, reason: reason.trim() }) });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || `تعذر ${label}`);
+        await refreshDashboardData();
+        alert(`تم ${label} بنجاح.`);
+    } catch (e) {
+        alert(readableError(e, `تعذر ${label} حالياً.`));
+        console.error(`[${action}]`, e);
+    }
+}
+
+window.archiveProduct = id => archiveEntity('archive_product', id, 'أرشفة المنتج ومراجعة الشحنات المرتبطة');
+window.restoreProduct = id => window.ADMIN_SESSION?.owner === true ? archiveEntity('restore_product', id, 'استرجاع المنتج') : alert('استرجاع الأرشيف متاح للمالك فقط.');
 
 window.toggleProductVisibility = async function(id, newActive) {
     try {
@@ -1158,19 +1238,37 @@ async function initComplaintsSystem() {
     const filterAll = document.getElementById('filter-complaints-all');
     const filterNew = document.getElementById('filter-complaints-new');
     const filterResolved = document.getElementById('filter-complaints-resolved');
+    const filterArchived = document.getElementById('filter-complaints-archived');
+
+    const refreshComplaints = (filterFn) => {
+        const filtered = sampleComplaints.filter(c => {
+            const isArchived = c.is_archived === true;
+            if (filterFn === 'archived') return isArchived;
+            return !isArchived && (filterFn === 'all' || c.status === filterFn);
+        });
+        renderComplaints(filtered);
+    };
 
     if (filterAll) filterAll.addEventListener('click', () => {
         setComplaintFilterActive(filterAll);
-        renderComplaints(sampleComplaints);
+        refreshComplaints('all');
     });
     if (filterNew) filterNew.addEventListener('click', () => {
         setComplaintFilterActive(filterNew);
-        renderComplaints(sampleComplaints.filter(c => c.status === 'new'));
+        refreshComplaints('new');
     });
     if (filterResolved) filterResolved.addEventListener('click', () => {
         setComplaintFilterActive(filterResolved);
-        renderComplaints(sampleComplaints.filter(c => c.status === 'resolved'));
+        refreshComplaints('resolved');
     });
+    if (filterArchived) {
+        filterArchived.hidden = (window.ADMIN_SESSION?.owner !== true);
+        filterArchived.addEventListener('click', () => {
+            setComplaintFilterActive(filterArchived);
+            refreshComplaints('archived');
+        });
+    }
+    refreshComplaints('all');
 
     // Mark as Resolved inside Modal
     const resolveBtn = document.getElementById('resolve-complaint-btn');
@@ -1202,7 +1300,7 @@ async function initComplaintsSystem() {
 }
 
 function setComplaintFilterActive(activeBtn) {
-    ['filter-complaints-all', 'filter-complaints-new', 'filter-complaints-resolved'].forEach(id => {
+    ['filter-complaints-all', 'filter-complaints-new', 'filter-complaints-resolved', 'filter-complaints-archived'].forEach(id => {
         const btn = document.getElementById(id);
         if (btn) btn.classList.remove('active-filter');
     });
@@ -1218,21 +1316,29 @@ function renderComplaints(complaints) {
         return;
     }
 
-    container.innerHTML = complaints.map(c => `
-        <div class="complaint-card glass-panel" onclick="openComplaintModal(${c.id})">
+    container.innerHTML = complaints.map(c => {
+        const archiveAction = c.is_archived
+            ? (window.ADMIN_SESSION?.owner === true ? `<button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); restoreComplaint(${Number(c.id)})"><i class="fa-solid fa-rotate-left"></i> استرجاع</button>` : '')
+            : (can('complaints.delete') ? `<button class="btn btn-danger-ghost btn-sm" onclick="event.stopPropagation(); archiveComplaint(${Number(c.id)})"><i class="fa-solid fa-box-archive"></i> أرشفة</button>` : '');
+        const archiveMeta = c.is_archived ? `<p class="text-danger text-sm mt-2"><strong>مؤرشفة:</strong> ${safeText(c.archive_reason || 'بدون سبب مسجل')} ${c.archived_by ? ` · بواسطة ${safeText(c.archived_by)}` : ''}</p>` : '';
+        return `<div class="complaint-card glass-panel${c.is_archived ? ' opacity-50' : ''}" onclick="openComplaintModal(${Number(c.id)})">
             <div class="flex-between">
-                <strong class="text-primary font-bold text-lg">${c.client}</strong>
-                <span class="badge ${c.status === 'new' ? 'badge-new' : 'badge-resolved'}">${c.status === 'new' ? 'جديد (معلق)' : 'تم الحل'}</span>
+                <strong class="text-primary font-bold text-lg">${safeText(c.client)}</strong>
+                <span class="badge ${c.is_archived ? 'badge-process' : (c.status === 'new' ? 'badge-new' : 'badge-resolved')}">${c.is_archived ? 'مؤرشفة' : (c.status === 'new' ? 'جديد (معلق)' : 'تم الحل')}</span>
             </div>
-            <span class="text-subtle text-sm">${c.date}</span>
-            <p class="text-subtle text-sm mt-1" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${c.text}</p>
+            <span class="text-subtle text-sm">${safeText(c.date)}</span>
+            <p class="text-subtle text-sm mt-1" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${safeText(c.text)}</p>${archiveMeta}
             <div class="flex-between mt-2 pt-2 border-b">
                 <span class="text-primary font-bold text-sm">عرض التفاصيل <i class="fa-solid fa-arrow-left"></i></span>
-                <span class="text-subtle text-sm" dir="ltr">${c.phone}</span>
+                <span class="text-subtle text-sm" dir="ltr">${safeText(c.phone)}</span>
             </div>
-        </div>
-    `).join('');
+            ${archiveAction ? `<div class="flex-align gap-2 mt-2">${archiveAction}</div>` : ''}
+        </div>`;
+    }).join('');
 }
+
+window.archiveComplaint = id => archiveEntity('archive_complaint', id, 'أرشفة الشكوى');
+window.restoreComplaint = id => window.ADMIN_SESSION?.owner === true ? archiveEntity('restore_complaint', id, 'استرجاع الشكوى') : alert('استرجاع الأرشيف متاح للمالك فقط.');
 
 window.openComplaintModal = function(id) {
     const c = sampleComplaints.find(item => item.id === id);
@@ -1246,7 +1352,7 @@ window.openComplaintModal = function(id) {
 
     const badgeEl = document.getElementById('modal-c-status-badge');
     if (badgeEl) {
-        badgeEl.innerHTML = `<span class="badge ${c.status === 'new' ? 'badge-new' : 'badge-resolved'}">${c.status === 'new' ? 'جديد (معلق)' : 'تم الحل'}</span>`;
+        badgeEl.innerHTML = `<span class="badge ${c.is_archived ? 'badge-process' : (c.status === 'new' ? 'badge-new' : 'badge-resolved')}">${c.is_archived ? 'مؤرشفة' : (c.status === 'new' ? 'جديد (معلق)' : 'تم الحل')}</span>`;
     }
 
     document.getElementById('complaint-modal').classList.remove('hidden');
