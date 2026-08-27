@@ -747,6 +747,16 @@
                         <input type="text" id="cat-desc" class="form-control"
                             placeholder="وصف يعبر عن القسم ومحتوياته...">
                     </div>
+                    <div class="form-group mb-3 category-image-field">
+                        <label for="cat-image-file">صورة القسم <span class="text-subtle">(اختيارية)</span></label>
+                        <input type="file" id="cat-image-file" class="form-control" accept="image/png,image/jpeg,image/webp">
+                        <input type="hidden" id="cat-image-url" value="">
+                        <div class="category-image-preview-wrap" id="cat-image-preview-wrap" hidden>
+                            <img id="cat-image-preview" class="category-image-preview" alt="معاينة صورة القسم">
+                            <button type="button" class="btn btn-ghost btn-sm" id="cat-image-remove"><i class="fa-solid fa-trash"></i> استخدام الصورة الافتراضية</button>
+                        </div>
+                        <small class="form-hint">ارفع صورة واضحة للقسم. لو ما رفعتش صورة، المتجر هيختار صورة افتراضية مناسبة من اسم القسم.</small>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-ghost close-modal">إلغاء</button>

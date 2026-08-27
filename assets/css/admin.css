@@ -719,3 +719,12 @@ textarea.form-control { resize: vertical; }
   .overview-heading { align-items: flex-start; flex-direction: column; }
   .overview-charts { grid-template-columns: 1fr; }
 }
+
+
+/* ─── Category image upload & preview ─── */
+.category-image-preview-wrap { display: flex; align-items: center; gap: .7rem; flex-wrap: wrap; margin-top: .7rem; padding: .65rem; border: 1px solid var(--border-color, #e5e7eb); border-radius: 12px; background: var(--surface-muted, #f8faf9); }
+.category-image-preview { width: 145px; height: 82px; object-fit: cover; border-radius: 9px; border: 1px solid rgba(26,107,60,.18); background: #fff; }
+.category-image-field .form-hint { display: block; margin-top: .45rem; color: var(--text-subtle, #64748b); font-size: .72rem; line-height: 1.6; }
+.category-card-main { display: flex; align-items: center; gap: .75rem; min-width: 0; }
+.category-card-thumb { width: 68px; height: 52px; object-fit: cover; flex: 0 0 auto; border-radius: 9px; background: #eef5ef; }
+@media (max-width: 560px) { .category-image-preview { width: 100%; height: 130px; } .category-card-main { align-items: flex-start; } }

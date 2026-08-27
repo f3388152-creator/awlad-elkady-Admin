@@ -8,7 +8,7 @@ module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   const user = await getSessionUser(req);
   if (!user) return res.status(401).json({ error: 'Admin session required' });
-  if (!isPrimaryAdmin(user) && !hasPermission(user, 'products.upload') && !hasPermission(user, 'landing.edit')) {
+  if (!isPrimaryAdmin(user) && !hasPermission(user, 'products.upload') && !hasPermission(user, 'categories.create') && !hasPermission(user, 'categories.update') && !hasPermission(user, 'landing.edit')) {
     return res.status(403).json({ error: 'Permission denied' });
   }
   if (!SUPABASE_URL || !SERVICE_ROLE_KEY) return res.status(503).json({ error: 'Storage is not configured' });

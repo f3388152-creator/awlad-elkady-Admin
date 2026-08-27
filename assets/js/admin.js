@@ -1202,10 +1202,41 @@ async function initProductsAndCategories() {
     const categoryModal = document.getElementById('category-modal');
     const categoryForm = document.getElementById('category-form');
 
+    const catImageFile = document.getElementById('cat-image-file');
+    const catImageUrl = document.getElementById('cat-image-url');
+    const catImagePreviewWrap = document.getElementById('cat-image-preview-wrap');
+    const catImagePreview = document.getElementById('cat-image-preview');
+    const catImageRemove = document.getElementById('cat-image-remove');
+    const updateCategoryImagePreview = (url) => {
+        const value = String(url || '').trim();
+        if (catImageUrl) catImageUrl.value = value;
+        if (catImagePreview) catImagePreview.src = value || 'assets/images/logo.png';
+        if (catImagePreviewWrap) catImagePreviewWrap.hidden = !value;
+    };
+    catImageFile?.addEventListener('change', async () => {
+        const file = catImageFile.files?.[0];
+        if (!file) return;
+        try {
+            if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) throw new Error('نوع الصورة غير مسموح؛ استخدم PNG أو JPEG أو WebP.');
+            if (file.size > 5 * 1024 * 1024) throw new Error('حجم الصورة أكبر من 5 ميجابايت.');
+            const localUrl = URL.createObjectURL(file);
+            updateCategoryImagePreview(localUrl);
+            catImagePreview?.addEventListener('load', () => URL.revokeObjectURL(localUrl), { once: true });
+            const uploadedUrl = await sb_upload(file);
+            updateCategoryImagePreview(uploadedUrl);
+        } catch (error) {
+            catImageFile.value = '';
+            updateCategoryImagePreview(catImageUrl?.value || '');
+            alert('تعذر رفع صورة القسم: ' + readableError(error, 'راجع نوع وحجم الصورة وصلاحيات الحساب.'));
+        }
+    });
+    catImageRemove?.addEventListener('click', () => { if (catImageFile) catImageFile.value = ''; updateCategoryImagePreview(''); });
+
     if (openAddCatBtn && categoryModal) {
         openAddCatBtn.addEventListener('click', () => {
             if (categoryForm) categoryForm.reset();
             document.getElementById('cat-edit-id').value = '';
+            updateCategoryImagePreview('');
             document.getElementById('cat-modal-title').textContent = 'إضافة قسم جديد';
             categoryModal.classList.remove('hidden');
         });
@@ -1219,11 +1250,13 @@ async function initProductsAndCategories() {
             const editId = document.getElementById('cat-edit-id')?.value;
             const name = document.getElementById('cat-name')?.value?.trim();
             const desc = document.getElementById('cat-desc')?.value?.trim();
+            const imageUrl = catImageUrl?.value?.trim() || null;
             if (!name) return alert('اكتب اسم القسم أولاً.');
             if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'جاري الحفظ...'; }
             try {
-                if (editId) await sb_update('categories', editId, {name, desc});
-                else await sb_insert('categories', {name, desc});
+                const payload = { name, desc, image_url: imageUrl };
+                if (editId) await sb_update('categories', editId, payload);
+                else await sb_insert('categories', payload);
                 categoryModal.classList.add('hidden');
                 await refreshDashboardData();
             } catch (error) {
@@ -1280,7 +1313,10 @@ function renderCategories(categories) {
     const container = document.getElementById('categories-cards-container');
     if (!container) return;
     if (!categories || categories.length === 0) { container.innerHTML = `<div class="glass-panel p-4 text-center text-subtle w-full" style="grid-column:1/-1">لا توجد أقسام مضافة حتى الآن.</div>`; return; }
-    container.innerHTML = categories.map(c => `<div class="category-card glass-panel"><div><strong class="text-primary block font-bold text-lg">${safeText(c.name)}</strong><span class="text-subtle text-sm">${safeText(c.desc || c.description || '')}</span></div><div class="flex-align gap-2"><button class="btn btn-ghost btn-sm" onclick="editCategory(${Number(c.id)})"><i class="fa-solid fa-pen"></i></button><button class="btn btn-danger-ghost btn-sm" onclick="deleteCategory(${Number(c.id)})"><i class="fa-solid fa-trash"></i></button></div></div>`).join('');
+    container.innerHTML = categories.map(c => {
+        const image = c.image_url || 'assets/images/logo.png';
+        return `<div class="category-card glass-panel"><div class="category-card-main"><img class="category-card-thumb" src="${safeText(image)}" alt="${safeText(c.name)}" onerror="this.onerror=null;this.src='assets/images/logo.png'"><div><strong class="text-primary block font-bold text-lg">${safeText(c.name)}</strong><span class="text-subtle text-sm">${safeText(c.desc || c.description || '')}</span></div></div><div class="flex-align gap-2"><button class="btn btn-ghost btn-sm" onclick="editCategory(${Number(c.id)})"><i class="fa-solid fa-pen"></i></button><button class="btn btn-danger-ghost btn-sm" onclick="deleteCategory(${Number(c.id)})"><i class="fa-solid fa-trash"></i></button></div></div>`;
+    }).join('');
 }
 
 // 6 Image Slots Uploader State & Logic
@@ -1402,6 +1438,14 @@ window.editCategory = function(id) {
     document.getElementById('cat-edit-id').value = cat.id;
     document.getElementById('cat-name').value = cat.name;
     document.getElementById('cat-desc').value = cat.desc;
+    const imageUrl = document.getElementById('cat-image-url');
+    const imagePreview = document.getElementById('cat-image-preview');
+    const imageWrap = document.getElementById('cat-image-preview-wrap');
+    if (imageUrl) imageUrl.value = cat.image_url || '';
+    if (imagePreview) imagePreview.src = cat.image_url || 'assets/images/logo.png';
+    if (imageWrap) imageWrap.hidden = !cat.image_url;
+    const imageFile = document.getElementById('cat-image-file');
+    if (imageFile) imageFile.value = '';
 
     document.getElementById('cat-modal-title').textContent = 'تعديل القسم';
     document.getElementById('category-modal').classList.remove('hidden');
