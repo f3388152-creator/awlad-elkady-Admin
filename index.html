@@ -435,27 +435,40 @@
                                 </h3>
 
                                 <!-- Maintenance Mode -->
-                                <div class="card-item border-danger mb-4">
-                                    <div class="flex-between mb-3">
+                                <div class="maintenance-settings-card">
+                                    <div class="maintenance-settings-head">
                                         <div>
-                                            <div class="font-bold text-danger text-lg">تفعيل وضع الصيانة (إغلاق الموقع
-                                                للزوار)</div>
-                                            <div class="text-subtle text-sm mt-1">عند التفعيل تظهر صفحة توقف مؤقت
-                                                للجمهور</div>
+                                            <span class="maintenance-kicker"><i class="fa-solid fa-sparkles"></i> تجربة زائر راقية</span>
+                                            <div class="font-bold text-danger text-lg">تفعيل وضع الصيانة للزوار</div>
+                                            <div class="text-subtle text-sm mt-1">الصفحة هتظهر بلوجو المتجر ورسالتك وموعد العودة والعداد التنازلي.</div>
                                         </div>
-                                        <label class="switch-toggle">
+                                        <label class="switch-toggle" title="تفعيل أو إيقاف وضع الصيانة">
                                             <input type="checkbox" id="maintenance-mode-toggle">
                                             <span class="slider"></span>
                                         </label>
                                     </div>
-                                    <div class="form-group">
-                                        <label>رسالة التوقف للزوار</label>
-                                        <textarea class="form-control" id="maintenance-message"
-                                            rows="2">الموقع يخضع حالياً لأعمال التحديث وتجهيز العروض الجديدة... سنعود قريباً!</textarea>
+                                    <div class="form-grid cols-2 maintenance-form-grid">
+                                        <div class="form-group">
+                                            <label for="maintenance-message">رسالة الزوار</label>
+                                            <textarea class="form-control" id="maintenance-message" rows="3" maxlength="240">بنجهز لكم تجربة أفضل وعروض جديدة. هنرجع قريباً بكل جديد!</textarea>
+                                            <div class="text-subtle text-xs mt-1">اكتب الرسالة اللي تحب العميل يشوفها.</div>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="maintenance-end-at">موعد العودة المتوقع</label>
+                                            <input type="datetime-local" class="form-control" id="maintenance-end-at">
+                                            <div class="text-subtle text-xs mt-1">اختار اليوم والتاريخ والساعة حسب توقيت مصر.</div>
+                                        </div>
+                                    </div>
+                                    <div class="maintenance-admin-preview">
+                                        <img id="maintenance-preview-logo" src="/assets/images/logo.png" alt="معاينة لوجو المتجر">
+                                        <div>
+                                            <strong>المعاينة هتظهر للعميل</strong>
+                                            <span>لوجو + رسالة مخصصة + موعد العودة + عداد بالأيام والساعات والدقائق والثواني.</span>
+                                        </div>
                                     </div>
                                 </div>
                                 <button class="btn btn-danger" id="save-maintenance-btn"><i
-                                        class="fa-solid fa-shield"></i> تطبيق إعدادات الصيانة والألوان</button>
+                                        class="fa-solid fa-shield"></i> حفظ إعدادات الصيانة</button>
                             </div>
 
                         </div>

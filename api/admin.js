@@ -47,7 +47,7 @@ function siteSettingsPermission(body) {
     [['address', 'footer_phone', 'whatsapp_number'], 'landing.edit_contact'],
     [['shipping_custom', 'shipping_type', 'shipping_flat_rate', 'free_shipping_enabled', 'free_shipping_threshold'], 'landing.edit_shipping'],
     [['bosta_default_package_type'], 'landing.edit_bosta'],
-    [['maintenance_mode', 'maintenance_message'], 'landing.edit_maintenance']
+    [['maintenance_mode', 'maintenance_message', 'maintenance_end_at'], 'landing.edit_maintenance']
   ];
   const required = new Set();
   for (const key of keys) {

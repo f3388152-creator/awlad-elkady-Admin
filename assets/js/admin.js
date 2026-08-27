@@ -1397,9 +1397,21 @@ async function initSiteSettings() {
         if (settings.marquee_behavior) document.getElementById('setting-marquee-behavior').value = settings.marquee_behavior;
         if (settings.marquee_end_date) document.getElementById('setting-marquee-end-date').value = settings.marquee_end_date.slice(0, 16);
 
-        // Populating Toggles
-        if (settings.shipping_custom) document.getElementById('custom-shipping-master-toggle').checked = true;
-        if (settings.maintenance_mode) document.getElementById('maintenance-mode-toggle').checked = true;
+        // Populating Toggles and maintenance schedule
+        const shippingToggle = document.getElementById('custom-shipping-master-toggle');
+        const maintenanceToggle = document.getElementById('maintenance-mode-toggle');
+        if (shippingToggle) shippingToggle.checked = settings.shipping_custom === true;
+        if (maintenanceToggle) maintenanceToggle.checked = settings.maintenance_mode === true;
+        const maintenanceEnd = document.getElementById('maintenance-end-at');
+        if (maintenanceEnd && settings.maintenance_end_at) {
+            const parsed = new Date(settings.maintenance_end_at);
+            if (!Number.isNaN(parsed.getTime())) {
+                const local = new Date(parsed.getTime() - parsed.getTimezoneOffset() * 60000);
+                maintenanceEnd.value = local.toISOString().slice(0, 16);
+            }
+        }
+        const maintenanceLogoPreview = document.getElementById('maintenance-preview-logo');
+        if (maintenanceLogoPreview && settings.logo_header) maintenanceLogoPreview.src = settings.logo_header;
     }
 
     renderSocialLinks();
@@ -1513,7 +1525,7 @@ async function initSiteSettings() {
                     await saveFn();
                     alert('تم حفظ البيانات بنجاح!');
                 } catch (err) {
-                    alert('حدث خطأ أثناء الحفظ.');
+                    alert(err?.message || 'حدث خطأ أثناء الحفظ.');
                     console.error(err);
                 } finally {
                     btn.disabled = false;
@@ -1571,9 +1583,18 @@ async function initSiteSettings() {
     });
 
     wrapSaveBtn('save-maintenance-btn', async () => {
+        const enabled = document.getElementById('maintenance-mode-toggle')?.checked || false;
+        const message = document.getElementById('maintenance-message')?.value?.trim() || null;
+        const rawEndAt = document.getElementById('maintenance-end-at')?.value || '';
+        const endAt = rawEndAt ? new Date(rawEndAt) : null;
+        if (enabled && (!endAt || Number.isNaN(endAt.getTime()) || endAt.getTime() <= Date.now())) {
+            throw new Error('لازم تحدد موعد رجوع صحيح وفي المستقبل قبل تفعيل وضع الصيانة.');
+        }
+        if (enabled && !message) throw new Error('اكتب رسالة للزوار قبل تفعيل وضع الصيانة.');
         await sb_update('site_settings', siteSettingsId, {
-            maintenance_mode: document.getElementById('maintenance-mode-toggle')?.checked || false,
-            maintenance_message: document.getElementById('maintenance-message')?.value?.trim() || null
+            maintenance_mode: enabled,
+            maintenance_message: message,
+            maintenance_end_at: endAt ? endAt.toISOString() : null
         });
     });
 }
