@@ -169,6 +169,7 @@ function applySessionPermissions() {
     const panel = document.getElementById('staff-management-panel');
     if (panel) panel.hidden = session.owner !== true;
     if (session.owner === true) initStaffManagement();
+    initBostaPickupControl();
 }
 
 async function hydrateAdminSession() {
@@ -750,7 +751,9 @@ function initBostaPickupControl() {
     const button = document.getElementById('request-bosta-pickup-btn');
     if (!button) return;
     button.hidden = !can('bosta.request_pickup');
+    if (button.dataset.bound === '1') return;
     button.addEventListener('click', window.requestBostaPickup);
+    button.dataset.bound = '1';
 }
 
 window.printBostaAwb = async function(orderId, awbType = 'A4') {
