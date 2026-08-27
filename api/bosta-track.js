@@ -65,7 +65,7 @@ function safeOrder(order, requests = []) {
 
 async function findManagedOrder(orderId, accessToken) {
   if (!Number.isInteger(orderId) || orderId <= 0 || accessToken.length < 16 || accessToken.length > 200) return null;
-  const rows = await supabase(`/rest/v1/orders?id=eq.${orderId}&customer_access_token=eq.${encodeURIComponent(accessToken)}&select=id,created_at,status,customer_name,customer_phone,governorate,area,address,notes,subtotal,shipping_fee,total,items,bosta_status,bosta_tracking_number,bosta_delivery_id&limit=1`);
+  const rows = await supabase(`/rest/v1/orders?id=eq.${orderId}&customer_access_token=eq.${encodeURIComponent(accessToken)}&select=id,created_at,status,customer_name,customer_phone,governorate,area,address,subtotal,shipping_fee,total,items,bosta_status,bosta_tracking_number,bosta_delivery_id&limit=1`);
   return rows?.[0] || null;
 }
 
