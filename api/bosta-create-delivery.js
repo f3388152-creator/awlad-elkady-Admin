@@ -1,4 +1,4 @@
-const { cors, json, parseBody, supabase, createBostaDelivery, BOSTA_API_KEY, BOSTA_BASE_URL } = require('../lib/_server');
+const { cors, json, parseBody, supabase, createBostaDelivery, BOSTA_API_KEY, BOSTA_BASE_URL, BUSINESS_LOCATION_ID } = require('../lib/_server');
 const { authorize } = require('../lib/admin-session');
 
 async function getOrder(orderId) {
@@ -25,6 +25,48 @@ async function markPacked(req, res, body) {
   } catch (error) {
     console.error('[bosta-pack]', error.message, error.data || '');
     return json(res, error.status || 500, { error: 'تعذر حفظ حالة التغليف.' });
+  }
+}
+
+async function requestPickup(req, res, body) {
+  const auth = await authorize(req, 'bosta.request_pickup');
+  if (!auth.ok) return json(res, auth.status, auth.status === 401 ? 'Admin session required' : 'Permission denied');
+  if (!BOSTA_API_KEY || !BUSINESS_LOCATION_ID) return json(res, 503, { error: 'Bosta integration is not configured' });
+  const scheduledDate = String(body.scheduled_date || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(scheduledDate)) return json(res, 422, { error: 'اختار تاريخ استلام صحيحاً بصيغة YYYY-MM-DD.' });
+  const date = new Date(`${scheduledDate}T00:00:00.000Z`);
+  const today = new Date(); today.setUTCHours(0, 0, 0, 0);
+  if (Number.isNaN(date.getTime()) || date < today) return json(res, 422, { error: 'تاريخ الاستلام لا يمكن أن يكون في الماضي.' });
+  if (date.getUTCDay() === 5) return json(res, 422, { error: 'Bosta لا تسمح بجدولة الاستلام يوم الجمعة.' });
+  const numberOfParcels = Number(body.number_of_parcels || 1);
+  if (!Number.isInteger(numberOfParcels) || numberOfParcels < 1 || numberOfParcels > 1000) return json(res, 422, { error: 'عدد الطرود لازم يكون بين 1 و1000.' });
+  const packageType = ['Normal', 'Light Bulky', 'Heavy Bulky'].includes(body.package_type) ? body.package_type : 'Normal';
+  try {
+    const response = await fetch(`${BOSTA_BASE_URL}/pickups`, {
+      method: 'POST',
+      headers: { Authorization: BOSTA_API_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        scheduledDate,
+        businessLocationId: BUSINESS_LOCATION_ID,
+        numberOfParcels: String(numberOfParcels),
+        packageType,
+        notes: String(body.notes || 'طلب استلام من لوحة معرض أولاد القاضي').slice(0, 200)
+      })
+    });
+    const text = await response.text();
+    let data = null; try { data = text ? JSON.parse(text) : null; } catch (_) { data = null; }
+    if (!response.ok) {
+      const error = new Error('BOSTA_PICKUP_REQUEST_FAILED');
+      error.status = response.status;
+      error.data = data;
+      throw error;
+    }
+    return json(res, 200, { ok: true, scheduled_date: scheduledDate, number_of_parcels: numberOfParcels, message: 'تم إرسال طلب استلام المندوب إلى Bosta.' });
+  } catch (error) {
+    console.error('[bosta-pickup]', error.message, error.data || '');
+    const remoteMessage = String(error.data?.message || error.data?.error || '').slice(0, 220);
+    if (error.message === 'BOSTA_PICKUP_REQUEST_FAILED') return json(res, error.status || 502, { error: remoteMessage || 'Bosta رفضت طلب استلام المندوب. راجع التاريخ ومكان الاستلام وطلبات pickup الموجودة.' });
+    return json(res, 502, { error: 'تعذر الاتصال بخدمة طلب استلام Bosta.' });
   }
 }
 
@@ -75,6 +117,7 @@ module.exports = async (req, res) => {
 
   if (body.action === 'mark_packed') return markPacked(req, res, body);
   if (body.action === 'print_awb') return printAwb(req, res, body);
+  if (body.action === 'request_pickup') return requestPickup(req, res, body);
 
   const orderId = Number(body.order_id);
   const accessToken = String(body.access_token || '');

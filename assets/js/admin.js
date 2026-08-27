@@ -75,6 +75,7 @@ window.sb_upload = async (file) => Supabase.upload(file);document.addEventListen
     initSettingsScopes();
     initAdminSettings();
     initOverview();
+    initBostaPickupControl();
 });
 
 // ==========================================
@@ -711,6 +712,45 @@ function renderOrders(orders) {
             </div>
         `;
     }).join('');
+}
+
+function nextBostaPickupDate() {
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    date.setDate(date.getDate() + 1);
+    while (date.getDay() === 5) date.setDate(date.getDate() + 1);
+    const yyyy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+}
+
+window.requestBostaPickup = async function() {
+    if (!can('bosta.request_pickup')) return alert('ليس لديك صلاحية طلب استلام المندوب.');
+    const readyCount = sampleOrders.filter(row => row.tracking_number && row.tracking_number !== '—' && !['تم التسليم', 'ملغي', 'مرفوض', 'مرتجع'].includes(String(row.status || ''))).length || 1;
+    const scheduledDate = window.prompt('اكتب تاريخ استلام المندوب بصيغة YYYY-MM-DD. يوم الجمعة غير مسموح.', nextBostaPickupDate());
+    if (scheduledDate === null) return;
+    const parcelsValue = window.prompt('عدد الطرود التي سيستلمها المندوب؟', String(readyCount));
+    if (parcelsValue === null) return;
+    const button = document.getElementById('request-bosta-pickup-btn');
+    if (button) { button.disabled = true; button.dataset.originalText = button.textContent; button.textContent = 'جاري طلب المندوب…'; }
+    try {
+        const response = await window.adminFetch('/api/bosta-create-delivery', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'request_pickup', scheduled_date: scheduledDate.trim(), number_of_parcels: Number(parcelsValue) }) });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.ok) throw new Error(data.error || 'تعذر طلب استلام المندوب');
+        alert(`${data.message || 'تم إرسال طلب استلام المندوب إلى Bosta.'}\nالتاريخ: ${data.scheduled_date}\nعدد الطرود: ${data.number_of_parcels}`);
+    } catch (error) {
+        alert(readableError(error, 'تعذر طلب استلام المندوب من Bosta حالياً.'));
+    } finally {
+        if (button) { button.disabled = false; button.textContent = button.dataset.originalText || 'طلب استلام المندوب'; }
+    }
+};
+
+function initBostaPickupControl() {
+    const button = document.getElementById('request-bosta-pickup-btn');
+    if (!button) return;
+    button.hidden = !can('bosta.request_pickup');
+    button.addEventListener('click', window.requestBostaPickup);
 }
 
 window.printBostaAwb = async function(orderId, awbType = 'A4') {
