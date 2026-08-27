@@ -1,5 +1,5 @@
 const { isOwner } = require('../lib/admin-session');
-const { listStaff, createStaff, updateStaff, cleanStaff } = require('../lib/_staff');
+const { listStaff, createStaff, updateStaff, deleteStaff, cleanStaff } = require('../lib/_staff');
 
 function body(req) {
   if (req.body && typeof req.body === 'object') return req.body;
@@ -41,13 +41,12 @@ module.exports = async (req, res) => {
     const id = String(req.query?.id || payload.id || '');
     if (!id) return fail(res, 400, 'Missing staff id');
     if (req.method === 'DELETE') {
-      const row = await updateStaff(id, { is_active: false });
-      return res.status(200).json(row);
+      return res.status(200).json(await deleteStaff(id));
     }
     const row = await updateStaff(id, payload);
     return res.status(200).json(row);
   } catch (error) {
-    const known = new Set(['INVALID_PHONE', 'INVALID_PASSWORD', 'INVALID_NAME', 'STAFF_EXISTS', 'STAFF_NOT_FOUND', 'INVALID_SESSION_MINUTES', 'STAFF_RECORD_CREATE_FAILED']);
+    const known = new Set(['INVALID_PHONE', 'INVALID_PASSWORD', 'INVALID_NAME', 'STAFF_EXISTS', 'STAFF_NOT_FOUND', 'INVALID_SESSION_MINUTES', 'STAFF_RECORD_CREATE_FAILED', 'STAFF_DELETE_FAILED']);
     if (known.has(error.message)) return fail(res, error.status || 400, error.message);
     const remote = String(error.data?.msg || error.data?.message || error.data?.error_description || '').toLowerCase();
     if (error.message === 'SUPABASE_AUTH_ADMIN_FAILED' && /already registered|already exists|duplicate/.test(remote)) return fail(res, 409, 'STAFF_EXISTS');

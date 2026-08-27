@@ -582,3 +582,43 @@ textarea.form-control { resize: vertical; }
 .customer-request-changes { display:grid; gap:.3rem; margin:.55rem 0; padding:.65rem; border-radius:8px; background:#f5faf6; font-size:.82rem; }
 .customer-request-actions { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; margin-top:.75rem; }
 .customer-request-actions .form-control { flex:1 1 220px; min-width:160px; }
+
+
+/* Staff password visibility control */
+.password-field-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.password-field-wrap .form-control {
+    padding-inline-end: 3rem;
+}
+
+.password-toggle-btn {
+    position: absolute;
+    inset-inline-end: .35rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 2.35rem;
+    height: 2.35rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: .65rem;
+    background: transparent;
+    color: var(--clr-text-subtle);
+    cursor: pointer;
+}
+
+.password-toggle-btn:hover,
+.password-toggle-btn:focus-visible {
+    color: var(--clr-primary);
+    background: var(--clr-primary-light);
+    outline: none;
+}
+
+@media (max-width: 640px) {
+    .password-toggle-btn { width: 2.2rem; height: 2.2rem; }
+}

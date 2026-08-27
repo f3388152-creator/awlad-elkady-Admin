@@ -224,11 +224,28 @@ window.toggleStaff = async function(id, active) {
     await loadStaffList();
 };
 
+window.deleteStaffAccount = async function(id) {
+    if (window.ADMIN_SESSION?.owner !== true) return alert('حذف الموظف متاح للمالك فقط.');
+    const staff = window.staffCache.find(row => String(row.id) === String(id));
+    const name = staff?.display_name || 'هذا الموظف';
+    if (!window.confirm(`تأكيد حذف الموظف «${name}» نهائياً؟ سيتم إلغاء حساب دخوله وحذف سجله من القائمة.`)) return;
+    const response = await window.adminFetch(`/api/admin-staff?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if (!response.ok) {
+        let data = {}; try { data = await response.json(); } catch (_) {}
+        return alert(staffOperationMessage(data));
+    }
+    if (String(document.getElementById('staff-id')?.value || '') === String(id)) {
+        resetStaffForm();
+        document.getElementById('staff-phone').disabled = false;
+    }
+    await loadStaffList();
+};
+
 function renderStaffList(rows) {
     const target = document.getElementById('staff-list');
     if (!target) return;
     if (!rows.length) { target.innerHTML = '<p class="text-subtle">لا يوجد موظفون مضافون حالياً.</p>'; return; }
-    target.innerHTML = `<div class="table-responsive"><table class="data-table"><thead><tr><th>الاسم</th><th>الموبايل</th><th>الحالة</th><th>الجلسة</th><th>إجراء</th></tr></thead><tbody>${rows.map(row => `<tr><td>${safeText(row.display_name)}</td><td dir="ltr">${safeText(row.phone)}</td><td>${row.is_active === false ? '<span class="status-badge status-danger">موقوف</span>' : '<span class="status-badge status-success">نشط</span>'}</td><td>${row.session_enabled === false ? 'جلسة ممتدة (تجديد تلقائي)' : `${Number(row.session_minutes) || 60} دقيقة`}</td><td><button class="btn btn-secondary btn-sm" type="button" onclick="editStaff('${safeText(row.id)}')">تعديل</button><button class="btn btn-secondary btn-sm" type="button" onclick="toggleStaff('${safeText(row.id)}', ${row.is_active === false})">${row.is_active === false ? 'تفعيل' : 'إيقاف'}</button></td></tr>`).join('')}</tbody></table></div>`;
+    target.innerHTML = `<div class="table-responsive"><table class="data-table"><thead><tr><th>الاسم</th><th>الموبايل</th><th>الحالة</th><th>الجلسة</th><th>إجراء</th></tr></thead><tbody>${rows.map(row => `<tr><td>${safeText(row.display_name)}</td><td dir="ltr">${safeText(row.phone)}</td><td>${row.is_active === false ? '<span class="status-badge status-danger">موقوف</span>' : '<span class="status-badge status-success">نشط</span>'}</td><td>${row.session_enabled === false ? 'جلسة ممتدة (تجديد تلقائي)' : `${Number(row.session_minutes) || 60} دقيقة`}</td><td><button class="btn btn-secondary btn-sm" type="button" onclick="editStaff('${safeText(row.id)}')">تعديل</button><button class="btn btn-secondary btn-sm" type="button" onclick="toggleStaff('${safeText(row.id)}', ${row.is_active === false})">${row.is_active === false ? 'تفعيل' : 'إيقاف'}</button><button class="btn btn-danger btn-sm" type="button" onclick="deleteStaffAccount('${safeText(row.id)}')">حذف نهائي</button></td></tr>`).join('')}</tbody></table></div>`;
 }
 
 function staffOperationMessage(data = {}) {
@@ -263,6 +280,20 @@ function initStaffManagement() {
     if (staffManagementStarted) return;
     staffManagementStarted = true;
     const form = document.getElementById('staff-form');
+    const staffPassword = document.getElementById('staff-password');
+    const staffPasswordToggle = document.getElementById('toggle-staff-password');
+    if (staffPassword && staffPasswordToggle && staffPasswordToggle.dataset.bound !== '1') {
+        staffPasswordToggle.addEventListener('click', () => {
+            const visible = staffPassword.type === 'text';
+            staffPassword.type = visible ? 'password' : 'text';
+            const icon = staffPasswordToggle.querySelector('i');
+            icon?.classList.toggle('fa-eye', visible);
+            icon?.classList.toggle('fa-eye-slash', !visible);
+            staffPasswordToggle.title = visible ? 'إظهار كلمة المرور' : 'إخفاء كلمة المرور';
+            staffPasswordToggle.setAttribute('aria-label', visible ? 'إظهار كلمة مرور الموظف' : 'إخفاء كلمة مرور الموظف');
+        });
+        staffPasswordToggle.dataset.bound = '1';
+    }
     document.getElementById('staff-reset-btn')?.addEventListener('click', () => { resetStaffForm(); document.getElementById('staff-phone').disabled = false; });
     document.getElementById('apply-staff-global-session')?.addEventListener('click', async () => {
         const enabled = document.getElementById('staff-global-session-enabled')?.checked;
