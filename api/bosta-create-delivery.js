@@ -1,5 +1,6 @@
 const { cors, json, parseBody, supabase, createBostaDelivery, BOSTA_API_KEY, BOSTA_BASE_URL, BUSINESS_LOCATION_ID } = require('../lib/_server');
 const { authorize } = require('../lib/admin-session');
+const { createNotification } = require('../lib/_notifications');
 
 async function getOrder(orderId) {
   const rows = await supabase(`/rest/v1/orders?id=eq.${encodeURIComponent(String(orderId))}&select=*`);
@@ -21,6 +22,7 @@ async function markPacked(req, res, body) {
       bosta_status: 'packed',
       bosta_last_event: { source: 'admin', event: 'packed', at: new Date().toISOString(), actor: auth.user?.email || 'admin' }
     }, 'return=minimal');
+    try { await createNotification({ recipient_scope: 'permission', required_permissions: ['orders.view', 'bosta.pack'], event_type: 'bosta.packed', title: 'تم تغليف طلب', body: `تم تأكيد تغليف الطلب #${order.id}.`, url: '/#orders', data: { order_id: order.id } }); } catch (notificationError) { console.error('[bosta-pack-notification]', notificationError.message); }
     return json(res, 200, { ok: true, status: 'قيد التجهيز' });
   } catch (error) {
     console.error('[bosta-pack]', error.message, error.data || '');
@@ -66,6 +68,7 @@ async function requestPickup(req, res, body) {
     const pickupId = pickupSource._id || pickupSource.id || data?.pickupId || null;
     if (linkedOrder) {
       await supabase(`/rest/v1/orders?id=eq.${linkedOrder.id}`, 'PATCH', { bosta_pickup_id: pickupId ? String(pickupId) : null, bosta_sync_status: 'pickup_requested' }, 'return=minimal');
+      try { await createNotification({ recipient_scope: 'permission', required_permissions: ['orders.view', 'bosta.request_pickup'], event_type: 'bosta.pickup_requested', title: 'تم طلب Pickup من Bosta', body: `تم طلب استلام المندوب للطلب #${linkedOrder.id}.`, url: '/#orders', data: { order_id: linkedOrder.id, pickup_id: pickupId || null } }); } catch (notificationError) { console.error('[bosta-pickup-notification]', notificationError.message); }
     }
     return json(res, 200, { ok: true, pickup_id: pickupId, order_id: linkedOrder?.id || null, scheduled_date: scheduledDate, number_of_parcels: numberOfParcels, message: 'تم إرسال طلب استلام المندوب إلى Bosta.' });
   } catch (error) {
@@ -161,6 +164,7 @@ module.exports = async (req, res) => {
       bosta_business_reference: businessReference,
       bosta_created_at: new Date().toISOString()
     }, 'return=minimal');
+    try { await createNotification({ recipient_scope: 'permission', required_permissions: ['orders.view', 'bosta.create', 'bosta.pack', 'bosta.print_awb', 'bosta.request_pickup'], event_type: 'bosta.created', title: 'تم إنشاء شحنة Bosta', body: `تم إنشاء شحنة للطلب #${order.id}.`, url: '/#orders', data: { order_id: order.id, tracking_number: trackingNumber || null } }); } catch (notificationError) { console.error('[bosta-create-notification]', notificationError.message); }
     return json(res, 200, { ok: true, tracking_number: trackingNumber, delivery_id: deliveryId });
   } catch (error) {
     console.error('[bosta-create-delivery]', error.message, error.data || '');
@@ -169,6 +173,7 @@ module.exports = async (req, res) => {
         bosta_status: 'failed',
         bosta_last_event: { error: error.message, status: error.status || 502, at: new Date().toISOString() }
       }, 'return=minimal').catch(patchError => console.error('[bosta-create-delivery] status patch failed', patchError.message));
+      try { await createNotification({ recipient_scope: 'permission', required_permissions: ['orders.view', 'bosta.create'], event_type: 'bosta.failed', title: 'فشل إنشاء شحنة Bosta', body: `تعذر إنشاء شحنة الطلب #${order.id}. راجع تفاصيل الطلب.`, url: '/#orders', data: { order_id: order.id, error: error.message } }); } catch (notificationError) { console.error('[bosta-failure-notification]', notificationError.message); }
     }
     if (error.message === 'BOSTA_SERVER_ENV_MISSING') return json(res, 503, { error: 'Bosta integration is not configured' });
     if (error.message === 'BOSTA_ADDRESS_INCOMPLETE') return json(res, 422, { error: 'عنوان الشحن يحتاج المحافظة والمنطقة/الحي.' });

@@ -1,5 +1,6 @@
 const { token, authorize, getSessionUser, isPrimaryAdmin, isActiveStaff, SERVICE_ROLE_KEY, SUPABASE_URL } = require('../lib/admin-session');
 const { terminateBostaDelivery, deleteBostaPickup } = require('../lib/_server');
+const { createNotification, getNotificationForUser, supabase: notificationSupabase, VAPID_PUBLIC_KEY } = require('../lib/_notifications');
 
 const ALLOWED_TABLES = new Set([
   'products', 'categories', 'product_categories', 'orders', 'complaints',
@@ -100,12 +101,99 @@ async function requireActiveSession(req) {
   return { ok: true, status: 200, user };
 }
 
+async function safeNotify(event) {
+  try { return await createNotification(event); } catch (error) { console.error('[notification-create]', error.message, error.data || ''); return null; }
+}
+
+function mutationNotification(table, action, id, body = {}) {
+  const entity = id ? ` #${String(id).slice(0, 40)}` : '';
+  const map = {
+    products: { permission: 'products.view', labels: { insert: 'تمت إضافة منتج جديد', insertReturn: 'تمت إضافة منتج جديد', update: 'تم تحديث بيانات منتج', delete: 'تم حذف منتج من الكتالوج' } },
+    categories: { permission: 'categories.view', labels: { insert: 'تمت إضافة قسم جديد', insertReturn: 'تمت إضافة قسم جديد', update: 'تم تحديث قسم', delete: 'تم حذف قسم' } },
+    orders: { permission: 'orders.view', labels: { update: 'تم تحديث طلب' } },
+    complaints: { permission: 'complaints.view', labels: { update: 'تم تحديث شكوى', delete: 'تم حذف شكوى' } }
+  };
+  const config = map[table];
+  const title = config?.labels?.[action];
+  if (!title) return null;
+  return { event_type: `${table}.${action}`, title, body: `${title}${entity}. راجع لوحة الإدارة للمزيد من التفاصيل.`, url: `/#${table === 'orders' ? 'orders' : table === 'complaints' ? 'complaints' : table === 'categories' ? 'categories' : 'products'}`, required_permission: config.permission, recipient_scope: 'permission', data: { table, action, id: id || null } };
+}
+
+function notificationVisibleToUser(notification, user) {
+  if (!notification || !user) return false;
+  if (isPrimaryAdmin(user)) return true;
+  if (notification.recipient_scope === 'user') return String(notification.recipient_user_id || '') === String(user.id);
+  if (notification.recipient_scope === 'all_admins') return false;
+  const permissions = [...new Set([notification.required_permission, ...(Array.isArray(notification.required_permissions) ? notification.required_permissions : [])].filter(Boolean))];
+  return permissions.some(permission => user.app_metadata?.permissions?.[permission] === true);
+}
+
 module.exports = async (req, res) => {
   const params = req.query || {};
   const table = typeof params.table === 'string' ? params.table : '';
   const action = typeof params.action === 'string' ? params.action : 'select';
   const id = params.id;
   const fn = params.fn;
+
+  if (action === 'notify_new_order') {
+    if (req.method !== 'POST') return sendError(res, 405, 'Method not allowed');
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const orderId = Number(body.order_id);
+    const accessToken = String(body.access_token || '').trim();
+    if (!Number.isInteger(orderId) || orderId <= 0 || accessToken.length < 16 || accessToken.length > 200) return sendError(res, 400, 'بيانات الطلب غير صحيحة.');
+    const rows = await notificationSupabase(`/rest/v1/orders?id=eq.${orderId}&customer_access_token=eq.${encodeURIComponent(accessToken)}&select=id&limit=1`);
+    if (!rows?.[0]) return sendError(res, 404, 'الطلب غير موجود.');
+    const existing = await notificationSupabase(`/rest/v1/admin_notifications?event_type=eq.order.created&data->>order_id=eq.${orderId}&select=id&limit=1`);
+    if (!existing?.length) {
+      await safeNotify({ recipient_scope: 'permission', required_permission: 'orders.view', event_type: 'order.created', title: 'طلب جديد', body: `تم استلام طلب جديد رقم #${orderId}. راجع لوحة إدارة الطلبات.`, url: '/#orders', data: { order_id: orderId } });
+    }
+    return res.status(200).json({ ok: true, notified: !existing?.length });
+  }
+
+  if (['notification_list', 'notification_mark_read', 'push_config', 'push_subscribe', 'push_unsubscribe'].includes(action)) {
+    const auth = await requireActiveSession(req);
+    if (!auth.ok) return sendError(res, auth.status, 'Admin session required');
+    const user = auth.user;
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+
+    if (action === 'push_config') {
+      return res.status(200).json({ ok: true, enabled: Boolean(VAPID_PUBLIC_KEY), public_key: VAPID_PUBLIC_KEY || null });
+    }
+
+    if (action === 'notification_list') {
+      const rows = await notificationSupabase('/rest/v1/admin_notifications?select=*&order=created_at.desc&limit=200');
+      const visible = (rows || []).filter(item => notificationVisibleToUser(item, user));
+      const ids = visible.map(item => Number(item.id)).filter(Number.isInteger);
+      const reads = ids.length ? await notificationSupabase(`/rest/v1/admin_notification_reads?user_id=eq.${encodeURIComponent(String(user.id))}&notification_id=in.(${ids.join(',')})&select=notification_id,read_at`) : [];
+      const readById = new Map((reads || []).map(row => [String(row.notification_id), row.read_at]));
+      const withReadState = visible.map(item => ({ ...item, read_at: readById.get(String(item.id)) || null }));
+      return res.status(200).json({ notifications: withReadState, unread: withReadState.filter(item => !item.read_at).length });
+    }
+
+    if (action === 'notification_mark_read') {
+      const notificationId = Number(body.id || params.id);
+      if (!Number.isInteger(notificationId) || notificationId <= 0) return sendError(res, 400, 'رقم الإشعار غير صحيح.');
+      const notification = await getNotificationForUser(notificationId, user);
+      if (!notification || !notificationVisibleToUser(notification, user)) return sendError(res, 404, 'الإشعار غير موجود.');
+      await notificationSupabase('/rest/v1/admin_notification_reads?on_conflict=notification_id,user_id', 'POST', { notification_id: notificationId, user_id: user.id, read_at: new Date().toISOString() }, 'resolution=merge-duplicates,return=minimal');
+      return res.status(200).json({ ok: true });
+    }
+
+    if (action === 'push_subscribe') {
+      const subscription = body.subscription && typeof body.subscription === 'object' ? body.subscription : body;
+      const endpoint = String(subscription.endpoint || '').trim();
+      const p256dh = String(subscription.keys?.p256dh || '').trim();
+      const authKey = String(subscription.keys?.auth || '').trim();
+      if (!/^https:\/\//.test(endpoint) || endpoint.length > 2000 || !p256dh || !authKey) return sendError(res, 422, 'بيانات اشتراك الإشعارات غير صحيحة.');
+      const rows = await notificationSupabase('/rest/v1/admin_push_subscriptions?on_conflict=user_id,endpoint', 'POST', { user_id: user.id, is_owner: isPrimaryAdmin(user), endpoint, p256dh, auth: authKey, user_agent: String(req.headers['user-agent'] || '').slice(0, 500), is_active: true }, 'resolution=merge-duplicates,return=representation');
+      return res.status(200).json({ ok: true, subscription_id: rows?.[0]?.id || null });
+    }
+
+    const endpoint = String(body.endpoint || '').trim();
+    if (!endpoint || endpoint.length > 2000) return sendError(res, 422, 'رابط جهاز الإشعارات غير صحيح.');
+    await notificationSupabase(`/rest/v1/admin_push_subscriptions?user_id=eq.${encodeURIComponent(String(user.id))}&endpoint=eq.${encodeURIComponent(endpoint)}`, 'PATCH', { is_active: false });
+    return res.status(200).json({ ok: true });
+  }
 
   if (['staff_help_list', 'staff_help_create', 'staff_help_reply', 'staff_help_mark_read'].includes(action)) {
     const auth = await requireActiveSession(req);
@@ -143,6 +231,9 @@ module.exports = async (req, res) => {
         status: 'pending'
       };
       const result = await upstream('/rest/v1/staff_help_requests', 'POST', req, payload, 'return=representation');
+      if (result.response.ok) {
+        await safeNotify({ recipient_scope: 'all_admins', event_type: 'staff_help.created', title: 'طلب مساعدة جديد', body: `${payload.staff_name}: ${subject}`, url: '/#overview', data: { request_type: 'staff_help', staff_id: staff.id } });
+      }
       res.status(result.response.status);
       return result.text ? res.send(result.text) : res.end();
     }
@@ -170,6 +261,9 @@ module.exports = async (req, res) => {
       status: 'replied', owner_reply: reply || null, owner_reply_image_url: imageUrl,
       replied_by: user.id, replied_at: new Date().toISOString(), read_at: null
     });
+    if (result.response.ok) {
+      await safeNotify({ recipient_scope: 'user', recipient_user_id: requestRow.staff_auth_user_id, event_type: 'staff_help.replied', title: 'رد جديد من المالك', body: reply || 'تم إرسال صورة توضيحية لطلبك.', url: '/#overview', data: { request_id: requestId, image_url: imageUrl } });
+    }
     res.status(result.response.status);
     return result.text ? res.send(result.text) : res.end();
   }
@@ -419,6 +513,10 @@ module.exports = async (req, res) => {
   const method = action === 'delete' ? 'DELETE' : action === 'update' ? 'PATCH' : 'POST';
   const prefer = action === 'insert' || action === 'insertReturn' ? 'return=representation' : 'return=minimal';
   const result = await upstream(path, method, req, method === 'DELETE' ? undefined : (req.body || {}), prefer);
+  if (result.response.ok && ['insert', 'insertReturn', 'update', 'delete'].includes(action)) {
+    const event = mutationNotification(table, action, id, req.body || {});
+    if (event) await safeNotify(event);
+  }
   res.status(result.response.status);
   return result.text ? res.send(result.text) : res.end();
 };

@@ -1,4 +1,5 @@
 const { cors, json, parseBody, supabase } = require('../lib/_server');
+const { createNotification } = require('../lib/_notifications');
 
 const TERMINAL_STATUSES = new Set(['تم التسليم', 'مرفوض', 'ملغي', 'مرتجع', 'تم الإلغاء']);
 const EDITABLE_FIELDS = new Set(['customer_name', 'customer_phone', 'governorate', 'area', 'address', 'notes']);
@@ -156,6 +157,20 @@ module.exports = async (req, res) => {
       requested_changes: changes
     }, 'return=representation');
     const request = Array.isArray(created) ? created[0] : created;
+    try {
+      const label = requestType === 'cancel' ? 'إلغاء' : 'تعديل بيانات';
+      await createNotification({
+        recipient_scope: 'permission',
+        required_permission: 'orders.view',
+        event_type: `order.customer_${requestType}`,
+        title: `طلب عميل: ${label}`,
+        body: `يوجد طلب ${label} جديد للأوردر #${order.id} ويحتاج مراجعة.`,
+        url: '/#orders',
+        data: { order_id: order.id, request_id: request?.id || null, request_type: requestType }
+      });
+    } catch (notificationError) {
+      console.error('[customer-request-notification]', notificationError.message);
+    }
     return json(res, 201, { ok: true, request_id: request?.id || null, status: 'pending', message: 'تم إرسال طلبك للإدارة للمراجعة.' });
   } catch (error) {
     console.error('[bosta-track request]', error.message, error.data || '');

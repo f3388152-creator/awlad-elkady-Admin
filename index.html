@@ -100,6 +100,15 @@
                     <h1 id="page-title" class="page-title">إدارة الطلبات</h1>
                 </div>
                 <div class="top-bar-right flex-align gap-3">
+                    <div class="notifications-wrap">
+                        <button id="notifications-bell" class="icon-btn notifications-bell" type="button" aria-label="الإشعارات" hidden>
+                            <i class="fa-solid fa-bell"></i><span id="notifications-badge" class="notification-badge" hidden>0</span>
+                        </button>
+                        <div id="notifications-panel" class="notifications-panel glass-panel" hidden>
+                            <div class="notifications-panel-heading"><strong>الإشعارات</strong><span>حسب صلاحيات الحساب</span></div>
+                            <div id="notifications-list" class="notifications-list"></div>
+                        </div>
+                    </div>
                     <div class="date-badge" id="current-date"></div>
                 </div>
             </header>
@@ -152,6 +161,10 @@
                         </article>
                     </div>
                     <div class="overview-note glass-panel"><i class="fa-solid fa-rotate"></i> الأرقام والرسوم بتتحدث تلقائياً مع بيانات النظام، ومن غير بيانات وهمية.</div>
+                    <div class="push-notifications-card glass-panel">
+                        <div><span class="chart-kicker">إشعارات الموبايل</span><h3>خليك متابع حتى لو اللوحة مقفولة</h3><p>فعّل إشعارات Chrome على موبايل أندرويد لاستقبال الأحداث الخاصة بصلاحيات حسابك.</p><small id="push-notifications-status">لم يتم تفعيل إشعارات الموبايل بعد.</small></div>
+                        <button class="btn btn-primary btn-sm" id="enable-push-notifications" type="button" hidden><i class="fa-solid fa-bell"></i> تفعيل الإشعارات</button>
+                    </div>
                     <section class="staff-help-panel glass-panel" id="staff-help-panel" hidden>
                         <div class="panel-heading"><div><span class="chart-kicker">مراسلة المالك</span><h3>عندك استفسار عن أي رقم؟</h3></div><button class="icon-btn" id="staff-help-close" type="button" aria-label="إغلاق نموذج المساعدة"><i class="fa-solid fa-xmark"></i></button></div>
                         <form id="staff-help-form" class="staff-help-form">
@@ -831,6 +844,7 @@
     <script src="/assets/js/config.js"></script>
     <script src="/assets/js/supabase-client.js"></script>
     <script src="assets/js/admin.js"></script>
+    <script src="assets/js/notifications.js"></script>
 </body>
 
 </html>

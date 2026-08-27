@@ -7,6 +7,7 @@ module.exports = async (req, res) => {
   const owner = isPrimaryAdmin(user);
   return res.status(200).json({
     admin: true,
+    user_id: user?.id || null,
     owner,
     role: owner ? 'admin' : 'staff',
     display_name: user?.user_metadata?.display_name || user?.email || '',

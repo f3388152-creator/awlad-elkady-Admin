@@ -1,4 +1,5 @@
 const { cors, json, parseBody, supabase, webhookAuthorized } = require('../lib/_server');
+const { createNotification } = require('../lib/_notifications');
 
 const STATUS_MAP = {
   10: 'جديد',
@@ -62,6 +63,9 @@ module.exports = async (req, res) => {
       status: STATUS_MAP[state] || order.status || 'قيد التجهيز'
     };
     await supabase(`/rest/v1/orders?id=eq.${order.id}`, 'PATCH', patch, 'return=minimal');
+    try {
+      await createNotification({ recipient_scope: 'permission', required_permissions: ['orders.view', 'bosta.create', 'bosta.pack', 'bosta.print_awb', 'bosta.request_pickup', 'bosta.cancel_delivery', 'bosta.cancel_pickup'], event_type: 'bosta.status', title: 'تحديث شحنة Bosta', body: `تحديث حالة الطلب #${order.id}: ${patch.status}.`, url: '/#orders', data: { order_id: order.id, status: patch.status, bosta_status: patch.bosta_status } });
+    } catch (notificationError) { console.error('[bosta-webhook-notification]', notificationError.message); }
     return json(res, 200, { ok: true });
   } catch (error) {
     console.error('[bosta-webhook]', error.message, error.data || '');

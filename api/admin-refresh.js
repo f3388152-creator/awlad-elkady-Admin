@@ -89,6 +89,7 @@ module.exports = async (req, res) => {
       ok: true,
       admin: true,
       owner: isPrimaryAdmin(user),
+      user_id: user.id,
       role: staff ? 'staff' : 'admin',
       display_name: staff ? cleanStaff(staff).display_name : (user.user_metadata?.display_name || user.email || ''),
       permissions: staff ? cleanStaff(staff).permissions : { '*': true }
