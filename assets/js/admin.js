@@ -36,7 +36,8 @@ window.sb_fetch = async (table) => {
         const query = table === 'site_settings' ? 'id=eq.1' : 'order=created_at.desc';
         const data = await Supabase.select(table, query);
         if (table === 'products') return data.map(normalizeProduct);
-        if (table === 'orders') return data.map(o => ({id: String(o.id), status: o.status, date: new Date(o.created_at).toLocaleDateString('ar-EG'), name: o.customer_name, phone: o.customer_phone, secondPhone: o.customer_second_phone, gov: o.governorate, area: o.area, address: o.address, subtotal: Number(o.subtotal) || 0, shipping: Number(o.shipping_fee) || 0, notes: o.notes, items: Array.isArray(o.items) ? o.items : [], tracking_number: o.tracking_number || '—', bosta_status: o.bosta_status || null}));
+        if (table === 'orders') return data.map(o => ({id: String(o.id), status: o.status, date: new Date(o.created_at).toLocaleDateString('ar-EG'), name: o.customer_name, phone: o.customer_phone, secondPhone: o.customer_second_phone, gov: o.governorate, area: o.area, address: o.address, subtotal: Number(o.subtotal) || 0, shipping: Number(o.shipping_fee) || 0, notes: o.notes, items: Array.isArray(o.items) ? o.items : [], tracking_number: o.bosta_tracking_number || o.tracking_number || '—', bosta_status: o.bosta_status || null, bosta_delivery_id: o.bosta_delivery_id || null}));
+        if (table === 'order_customer_requests') return data.map(r => ({ id: String(r.id), orderId: String(r.order_id), type: r.request_type, reason: r.reason || '', changes: r.requested_changes && typeof r.requested_changes === 'object' ? r.requested_changes : {}, status: r.status || 'pending', createdAt: new Date(r.created_at).toLocaleString('ar-EG'), adminNote: r.admin_note || '' }));
         if (table === 'complaints') return data.map(c => ({id: c.id, client: c.customer_name || '', phone: c.customer_phone || '', date: new Date(c.created_at).toLocaleDateString('ar-EG'), status: c.status || 'new', text: c.message || ''}));
         if (table === 'site_settings') return data.length ? [{...data[0], id: data[0].id}] : [];
         if (table === 'categories') return data.map(c => ({...c, desc: c.desc || c.description || ''}));
@@ -228,6 +229,20 @@ function renderStaffList(rows) {
     target.innerHTML = `<div class="table-responsive"><table class="data-table"><thead><tr><th>الاسم</th><th>الموبايل</th><th>الحالة</th><th>الجلسة</th><th>إجراء</th></tr></thead><tbody>${rows.map(row => `<tr><td>${safeText(row.display_name)}</td><td dir="ltr">${safeText(row.phone)}</td><td>${row.is_active === false ? '<span class="status-badge status-danger">موقوف</span>' : '<span class="status-badge status-success">نشط</span>'}</td><td>${row.session_enabled === false ? 'جلسة ممتدة (تجديد تلقائي)' : `${Number(row.session_minutes) || 60} دقيقة`}</td><td><button class="btn btn-secondary btn-sm" type="button" onclick="editStaff('${safeText(row.id)}')">تعديل</button><button class="btn btn-secondary btn-sm" type="button" onclick="toggleStaff('${safeText(row.id)}', ${row.is_active === false})">${row.is_active === false ? 'تفعيل' : 'إيقاف'}</button></td></tr>`).join('')}</tbody></table></div>`;
 }
 
+function staffOperationMessage(data = {}) {
+    const value = String(data.error || '').trim();
+    const messages = {
+        INVALID_PHONE: 'رقم موبايل الموظف غير صحيح. استخدم رقم مصري من 11 رقم.',
+        INVALID_PASSWORD: 'كلمة السر لازم تكون من 8 إلى 128 حرفاً.',
+        INVALID_NAME: 'اكتب اسم الموظف.',
+        STAFF_EXISTS: 'يوجد موظف مسجل بهذا الرقم بالفعل.',
+        INVALID_SESSION_MINUTES: 'مدة الجلسة لازم تكون بين 15 دقيقة و30 يوم.',
+        STAFF_RECORD_CREATE_FAILED: 'تم إنشاء حساب الدخول ولم يكتمل سجل الموظف؛ أعد المحاولة بعد مراجعة Migration الموظفين.',
+        'جدول الموظفين غير محدث في Supabase؛ نفّذ Migration الموظفين ثم أعد المحاولة.': 'جدول الموظفين غير محدث في Supabase؛ نفّذ Migration الموظفين ثم أعد المحاولة.'
+    };
+    return messages[value] || value || 'تعذر تنفيذ عملية الموظف حالياً. راجع إعدادات Supabase أو أعد المحاولة.';
+}
+
 async function loadStaffList() {
     const target = document.getElementById('staff-list');
     if (!target || window.ADMIN_SESSION?.owner !== true) return;
@@ -262,7 +277,7 @@ function initStaffManagement() {
         const payload = { phone: document.getElementById('staff-phone')?.value, display_name: document.getElementById('staff-name')?.value, password: document.getElementById('staff-password')?.value, is_active: document.getElementById('staff-active')?.checked, session_enabled: document.getElementById('staff-session-enabled')?.checked, session_minutes: Number(document.getElementById('staff-session-minutes')?.value) || 60, permissions: staffPermissionsFromForm() };
         if (id && !payload.password) delete payload.password;
         const response = await window.adminFetch(id ? `/api/admin-staff?id=${encodeURIComponent(id)}` : '/api/admin-staff', { method: id ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-        if (!response.ok) { let data = {}; try { data = await response.json(); } catch (_) {} return alert(data.error || 'تعذر حفظ الموظف.'); }
+        if (!response.ok) { let data = {}; try { data = await response.json(); } catch (_) {} return alert(staffOperationMessage(data)); }
         resetStaffForm();
         document.getElementById('staff-phone').disabled = false;
         await loadStaffList();
@@ -494,11 +509,15 @@ function initAswanShippingCalc() {
 // 5. ORDERS SYSTEM & EXACT BOSTA EXCEL EXPORT (V3.5)
 // ==========================================
 let sampleOrders = [];
+let customerRequests = [];
 let sampleProducts = [];
 let sampleCategories = [];
 
 async function initOrdersSystem() {
-    sampleOrders = await sb_fetch('orders') || [];
+    const [orders, requests] = await Promise.all([sb_fetch('orders'), sb_fetch('order_customer_requests').catch(() => [])]);
+    sampleOrders = orders || [];
+    customerRequests = requests || [];
+    renderCustomerRequests(customerRequests);
     renderOrders(sampleOrders);
 
     // Search filter
@@ -580,6 +599,43 @@ async function initOrdersSystem() {
     }
 }
 
+function renderCustomerRequests(requests = []) {
+    const panel = document.getElementById('customer-requests-panel');
+    const container = document.getElementById('customer-requests-container');
+    const count = document.getElementById('customer-requests-count');
+    if (!panel || !container) return;
+    const pendingCount = requests.filter(request => request.status === 'pending').length;
+    panel.hidden = !requests.length;
+    if (count) count.textContent = `${pendingCount} معلّق`;
+    if (!requests.length) { container.innerHTML = ''; return; }
+    const orderById = new Map(sampleOrders.map(order => [String(order.id), order]));
+    container.innerHTML = requests.slice(0, 40).map(request => {
+        const order = orderById.get(String(request.orderId));
+        const typeLabel = request.type === 'cancel' ? 'طلب إلغاء' : 'طلب تعديل بيانات التوصيل';
+        const statusLabel = request.status === 'pending' ? 'قيد المراجعة' : request.status === 'applied' ? 'تم التنفيذ' : 'تم الرفض';
+        const changeLabels = { customer_name: 'الاسم', customer_phone: 'الموبايل', governorate: 'المحافظة', area: 'المنطقة', address: 'العنوان', notes: 'الملاحظات' };
+        const changes = Object.entries(request.changes || {}).map(([key, value]) => `<div><strong>${safeText(changeLabels[key] || key)}:</strong> ${safeText(value)}</div>`).join('');
+        const controls = request.status === 'pending' && can('orders.update_status') ? `<div class="customer-request-actions"><input id="request-note-${safeText(request.id)}" class="form-control" placeholder="ملاحظة داخلية اختيارية" maxlength="500"><button class="btn btn-primary btn-sm" onclick="reviewCustomerRequest('${safeText(request.id)}','approve')">قبول وتنفيذ</button><button class="btn btn-danger btn-sm" onclick="reviewCustomerRequest('${safeText(request.id)}','reject')">رفض</button></div>` : '';
+        return `<article class="customer-request-card"><div class="customer-request-header"><strong>${safeText(typeLabel)} — طلب #${safeText(request.orderId)}</strong><span class="badge ${request.status === 'pending' ? 'badge-new' : 'badge-process'}">${safeText(statusLabel)}</span></div><div class="customer-request-meta">${safeText(request.createdAt)}${order?.name ? ` · ${safeText(order.name)}` : ''}${order?.phone ? ` · ${safeText(order.phone)}` : ''}</div><p><strong>السبب:</strong> ${safeText(request.reason)}</p>${changes ? `<div class="customer-request-changes"><strong>التعديل المطلوب:</strong>${changes}</div>` : ''}${order?.tracking_number && order.tracking_number !== '—' ? `<p class="text-danger text-sm">يوجد رقم تتبع Bosta: ${safeText(order.tracking_number)} — لا يتم التعديل أو الإلغاء تلقائياً.</p>` : ''}${controls}</article>`;
+    }).join('');
+}
+
+window.reviewCustomerRequest = async function(requestId, decision) {
+    const note = document.getElementById(`request-note-${requestId}`)?.value?.trim() || '';
+    try {
+        const response = await window.adminFetch('/api/admin?action=review_customer_request', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ request_id: requestId, decision, admin_note: note }) });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || 'تعذر مراجعة طلب العميل');
+        const [orders, requests] = await Promise.all([sb_fetch('orders'), sb_fetch('order_customer_requests')]);
+        sampleOrders = orders || [];
+        customerRequests = requests || [];
+        renderCustomerRequests(customerRequests);
+        renderOrders(sampleOrders);
+    } catch (error) {
+        alert(readableError(error, 'تعذر مراجعة طلب العميل حالياً.'));
+    }
+};
+
 function renderOrders(orders) {
     const container = document.getElementById('orders-cards-container');
     if (!container) return;
@@ -596,6 +652,7 @@ function renderOrders(orders) {
             : o.bosta_status === 'failed'
                 ? `<span class="text-danger text-sm block mt-1"><i class="fa-solid fa-triangle-exclamation"></i> فشل إنشاء بوليصة Bosta</span>`
                 : `<span class="text-subtle text-sm block mt-1 opacity-50">لا يوجد رقم بوليصة حتى الآن</span>`;
+        const bostaActions = o.tracking_number && o.tracking_number !== '—' ? `${can('bosta.print_awb') ? `<button class="btn btn-ghost btn-sm" onclick="printBostaAwb('${safeText(o.id)}','A4')"><i class="fa-solid fa-file-pdf"></i> طباعة AWB</button>` : ''}${can('bosta.pack') ? `<button class="btn btn-primary btn-sm" onclick="markOrderPacked('${safeText(o.id)}')"><i class="fa-solid fa-box"></i> تم التغليف</button>` : ''}` : '';
 
         return `
             <div class="order-card glass-panel" data-idx="${idx}">
@@ -645,8 +702,9 @@ function renderOrders(orders) {
                 </div>
 
                 <div class="order-card-footer">
-                    <div class="flex-align gap-2">
+                    <div class="flex-align gap-2 flex-wrap">
                         <button class="btn btn-ghost btn-sm" onclick="window.print()"><i class="fa-solid fa-print"></i> طباعة</button>
+                        ${bostaActions}
                     </div>
                     <span class="text-subtle text-sm">فرعي: ${(o.subtotal||0).toFixed(2)} | إجمالي: <strong class="text-primary">${total} ج.م</strong></span>
                 </div>
@@ -654,6 +712,37 @@ function renderOrders(orders) {
         `;
     }).join('');
 }
+
+window.printBostaAwb = async function(orderId, awbType = 'A4') {
+    try {
+        const response = await window.adminFetch('/api/bosta-create-delivery', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'print_awb', order_id: orderId, awb_type: awbType }) });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.ok) throw new Error(data.error || 'تعذر طباعة البوليصة');
+        if (data.pdf_base64) {
+            const bytes = Uint8Array.from(atob(data.pdf_base64), char => char.charCodeAt(0));
+            const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+            window.open(url, '_blank', 'noopener,noreferrer');
+            setTimeout(() => URL.revokeObjectURL(url), 60000);
+        } else {
+            alert(data.message || 'تم إرسال طلب طباعة البوليصة إلى Bosta.');
+        }
+    } catch (error) {
+        alert(readableError(error, 'تعذر طباعة بوليصة Bosta حالياً.'));
+    }
+};
+
+window.markOrderPacked = async function(orderId) {
+    try {
+        const response = await window.adminFetch('/api/bosta-create-delivery', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'mark_packed', order_id: orderId }) });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.ok) throw new Error(data.error || 'تعذر تأكيد التغليف');
+        const order = sampleOrders.find(row => String(row.id) === String(orderId));
+        if (order) order.status = data.status || 'قيد التجهيز';
+        renderOrders(sampleOrders);
+    } catch (error) {
+        alert(readableError(error, 'تعذر تأكيد التغليف حالياً.'));
+    }
+};
 
 window.updateOrderShipping = async function(orderId, idx, newShippingVal) {
     const val = parseFloat(newShippingVal) || 0;

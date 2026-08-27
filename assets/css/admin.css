@@ -573,3 +573,12 @@ textarea.form-control { resize: vertical; }
     .form-control { padding: .42rem .7rem; font-size: .78rem; }
     .staff-management-panel { padding: .8rem; }
 }
+
+/* Customer order requests */
+.customer-request-card { margin-top: .75rem; padding: .9rem; border: 1px solid #dfe9e2; border-radius: 12px; background: #fff; }
+.customer-request-header { display:flex; align-items:center; justify-content:space-between; gap:.75rem; flex-wrap:wrap; }
+.customer-request-meta { margin:.35rem 0 .55rem; color:#718076; font-size:.78rem; }
+.customer-request-card p { margin:.45rem 0; line-height:1.65; font-size:.86rem; }
+.customer-request-changes { display:grid; gap:.3rem; margin:.55rem 0; padding:.65rem; border-radius:8px; background:#f5faf6; font-size:.82rem; }
+.customer-request-actions { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; margin-top:.75rem; }
+.customer-request-actions .form-control { flex:1 1 220px; min-width:160px; }
