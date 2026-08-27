@@ -37,7 +37,7 @@ window.sb_fetch = async (table) => {
         const query = table === 'site_settings' ? 'id=eq.1' : 'order=created_at.desc';
         const data = await Supabase.select(table, query);
         if (table === 'products') return data.map(normalizeProduct);
-        if (table === 'orders') return data.map(o => ({id: String(o.id), status: o.status, date: new Date(o.created_at).toLocaleDateString('ar-EG'), name: o.customer_name, phone: o.customer_phone, secondPhone: o.customer_second_phone, gov: o.governorate, area: o.area, address: o.address, subtotal: Number(o.subtotal) || 0, shipping: Number(o.shipping_fee) || 0, notes: o.notes, items: Array.isArray(o.items) ? o.items : [], tracking_number: o.bosta_tracking_number || o.tracking_number || '—', bosta_status: o.bosta_status || null, bosta_delivery_id: o.bosta_delivery_id || null, bosta_pickup_id: o.bosta_pickup_id || null, bosta_sync_status: o.bosta_sync_status || null}));
+        if (table === 'orders') return data.map(o => ({id: String(o.id), status: o.status, createdAt: o.created_at || null, date: new Date(o.created_at).toLocaleDateString('ar-EG'), name: o.customer_name, phone: o.customer_phone, secondPhone: o.customer_second_phone, gov: o.governorate, area: o.area, address: o.address, subtotal: Number(o.subtotal) || 0, shipping: Number(o.shipping_fee) || 0, notes: o.notes, items: Array.isArray(o.items) ? o.items : [], tracking_number: o.bosta_tracking_number || o.tracking_number || '—', bosta_status: o.bosta_status || null, bosta_delivery_id: o.bosta_delivery_id || null, bosta_pickup_id: o.bosta_pickup_id || null, bosta_sync_status: o.bosta_sync_status || null}));
         if (table === 'order_customer_requests') return data.map(r => ({ id: String(r.id), orderId: String(r.order_id), type: r.request_type, reason: r.reason || '', changes: r.requested_changes && typeof r.requested_changes === 'object' ? r.requested_changes : {}, status: r.status || 'pending', createdAt: new Date(r.created_at).toLocaleString('ar-EG'), adminNote: r.admin_note || '' }));
         if (table === 'complaints') return data.map(c => ({id: c.id, client: c.customer_name || '', phone: c.customer_phone || '', date: new Date(c.created_at).toLocaleDateString('ar-EG'), status: c.status || 'new', text: c.message || '', is_archived: c.is_archived === true, archived_at: c.archived_at || null, archived_by: c.archived_by || '', archive_reason: c.archive_reason || ''}));
         if (table === 'site_settings') return data.length ? [{...data[0], id: data[0].id}] : [];
@@ -171,6 +171,7 @@ function applySessionPermissions() {
     if (panel) panel.hidden = session.owner !== true;
     if (session.owner === true) initStaffManagement();
     initBostaPickupControl();
+    initOverviewTools();
 }
 
 async function hydrateAdminSession() {
@@ -403,13 +404,206 @@ function attachProductCategories(products, links) {
     return (products || []).map(product => ({ ...product, category_ids: map.get(Number(product.id)) || [] }));
 }
 
-function initOverview() { updateOverviewStats(); }
+let overviewToolsStarted = false;
+let overviewHelpRows = [];
+
+function initOverview() {
+    updateOverviewStats();
+    initOverviewTools();
+}
+
+function overviewCan(permission) {
+    return window.ADMIN_SESSION?.owner === true || can(permission);
+}
+
+function applyOverviewVisibility() {
+    const cards = document.querySelectorAll('[data-overview-permission]');
+    let visible = 0;
+    cards.forEach(card => {
+        const allowed = overviewCan(card.dataset.overviewPermission);
+        card.hidden = !allowed;
+        if (allowed) visible += 1;
+    });
+    const empty = document.getElementById('overview-no-access');
+    if (empty) empty.hidden = visible > 0;
+}
+
 function updateOverviewStats() {
     const newOrders = sampleOrders.filter(order => ['جديد', 'new'].includes(order.status)).length;
+    const revenue = sampleOrders.reduce((sum, order) => sum + Number(order.subtotal || 0) + Number(order.shipping || 0), 0);
     const openComplaints = sampleComplaints.filter(item => !['resolved', 'تم الحل', 'closed'].includes(item.status)).length;
     const lowStock = sampleProducts.filter(item => Number(item.stock) <= Number(item.stockThreshold || 5)).length;
-    const values = { 'stat-new-orders': newOrders, 'stat-products': sampleProducts.length, 'stat-categories': sampleCategories.length, 'stat-open-complaints': openComplaints, 'stat-low-stock': lowStock };
+    const values = {
+        'stat-new-orders': newOrders,
+        'stat-revenue': `${revenue.toLocaleString('ar-EG')} جنيه`,
+        'stat-products': sampleProducts.length,
+        'stat-categories': sampleCategories.length,
+        'stat-open-complaints': openComplaints,
+        'stat-low-stock': lowStock
+    };
     Object.entries(values).forEach(([id, value]) => { const el = document.getElementById(id); if (el) el.textContent = value; });
+    applyOverviewVisibility();
+    renderOverviewCharts();
+}
+
+function emptyChart(target, message = 'لا توجد بيانات كافية حالياً.') {
+    if (target) target.innerHTML = `<div class="chart-empty"><i class="fa-solid fa-chart-simple"></i><span>${safeText(message)}</span></div>`;
+}
+
+function renderOrdersTrendChart() {
+    const target = document.getElementById('orders-trend-chart');
+    if (!target) return;
+    const today = new Date(); today.setHours(23, 59, 59, 999);
+    const days = Array.from({ length: 7 }, (_, index) => {
+        const date = new Date(today); date.setDate(today.getDate() - (6 - index)); date.setHours(0, 0, 0, 0);
+        return { date, label: date.toLocaleDateString('ar-EG', { weekday: 'short' }), count: 0 };
+    });
+    sampleOrders.forEach(order => {
+        const value = new Date(order.createdAt || '');
+        if (Number.isNaN(value.getTime())) return;
+        value.setHours(0, 0, 0, 0);
+        const item = days.find(day => day.date.getTime() === value.getTime());
+        if (item) item.count += 1;
+    });
+    const max = Math.max(...days.map(item => item.count), 1);
+    const points = days.map((item, index) => `${index * 100},${156 - (item.count / max) * 122}`).join(' ');
+    const area = `0,156 ${points} 600,156`;
+    target.innerHTML = `<svg class="line-chart" viewBox="0 0 600 205" role="img" aria-label="حركة الطلبات خلال آخر سبعة أيام" preserveAspectRatio="none"><defs><linearGradient id="overview-line-fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#1a6b3c" stop-opacity=".28"/><stop offset="1" stop-color="#1a6b3c" stop-opacity="0"/></linearGradient></defs><line x1="0" y1="156" x2="600" y2="156" class="chart-axis"/><line x1="0" y1="95" x2="600" y2="95" class="chart-grid-line"/><line x1="0" y1="34" x2="600" y2="34" class="chart-grid-line"/><polygon points="${area}" fill="url(#overview-line-fill)"/><polyline points="${points}" class="chart-line"/>${days.map((item, index) => `<circle cx="${index * 100}" cy="${156 - (item.count / max) * 122}" r="4" class="chart-point"><title>${safeText(item.label)}: ${item.count}</title></circle>`).join('')}</svg><div class="chart-labels">${days.map(item => `<span>${safeText(item.label)}</span>`).join('')}</div>`;
+}
+
+function renderStatusBars(targetId, rows, emptyMessage) {
+    const target = document.getElementById(targetId);
+    if (!target) return;
+    const total = rows.reduce((sum, row) => sum + row.value, 0);
+    if (!total) return emptyChart(target, emptyMessage);
+    target.innerHTML = rows.filter(row => row.value > 0).map(row => `<div class="metric-bar-row"><div class="metric-bar-label"><span>${safeText(row.label)}</span><strong>${row.value}</strong></div><div class="metric-bar-track"><span style="width:${Math.max(5, (row.value / total) * 100)}%;background:${row.color}"></span></div></div>`).join('');
+}
+
+function renderStockChart() {
+    const target = document.getElementById('stock-chart');
+    if (!target) return;
+    const rows = [...sampleProducts].sort((a, b) => Number(a.stock) - Number(b.stock)).slice(0, 5).filter(item => item && item.name);
+    if (!rows.length) return emptyChart(target, 'لا توجد منتجات حالياً.');
+    const max = Math.max(...rows.map(item => Number(item.stock) || 0), 1);
+    target.innerHTML = rows.map(item => `<div class="metric-bar-row"><div class="metric-bar-label"><span title="${safeText(item.name)}">${safeText(item.name)}</span><strong>${Number(item.stock) || 0}</strong></div><div class="metric-bar-track"><span class="stock-bar-fill" style="width:${Math.max(4, ((Number(item.stock) || 0) / max) * 100)}%"></span></div></div>`).join('');
+}
+
+function renderOverviewCharts() {
+    if (overviewCan('orders.view')) {
+        renderOrdersTrendChart();
+        const orderStatuses = {};
+        sampleOrders.forEach(order => { const key = String(order.status || 'غير محدد'); orderStatuses[key] = (orderStatuses[key] || 0) + 1; });
+        renderStatusBars('orders-status-chart', Object.entries(orderStatuses).map(([label, value]) => ({ label, value, color: '#1a6b3c' })), 'لا توجد طلبات حالياً.');
+    }
+    if (overviewCan('products.view')) renderStockChart();
+    if (overviewCan('complaints.view')) {
+        const complaintStatuses = {};
+        sampleComplaints.forEach(item => { const key = String(item.status || 'جديد'); complaintStatuses[key] = (complaintStatuses[key] || 0) + 1; });
+        renderStatusBars('complaints-status-chart', Object.entries(complaintStatuses).map(([label, value]) => ({ label, value, color: '#c9a227' })), 'لا توجد شكاوى حالياً.');
+    }
+}
+
+function initOverviewTools() {
+    applyOverviewVisibility();
+    const staffOpen = document.getElementById('staff-help-open');
+    const ownerOpen = document.getElementById('owner-help-open');
+    if (staffOpen) staffOpen.hidden = !window.ADMIN_SESSION || window.ADMIN_SESSION.owner === true;
+    if (ownerOpen) ownerOpen.hidden = window.ADMIN_SESSION?.owner !== true;
+    if (overviewToolsStarted) return;
+    overviewToolsStarted = true;
+    staffOpen?.addEventListener('click', () => document.getElementById('staff-help-panel')?.toggleAttribute('hidden'));
+    ownerOpen?.addEventListener('click', () => document.getElementById('owner-help-panel')?.toggleAttribute('hidden'));
+    document.getElementById('staff-help-close')?.addEventListener('click', () => { document.getElementById('staff-help-panel').hidden = true; });
+    document.getElementById('owner-help-close')?.addEventListener('click', () => { document.getElementById('owner-help-panel').hidden = true; });
+    document.getElementById('staff-help-form')?.addEventListener('submit', submitStaffHelpRequest);
+    document.getElementById('owner-help-list')?.addEventListener('click', handleOwnerHelpClick);
+    document.getElementById('staff-help-list')?.addEventListener('click', handleStaffHelpClick);
+    loadHelpRequests();
+}
+
+async function loadHelpRequests() {
+    if (!window.ADMIN_SESSION) return;
+    try {
+        const response = await window.adminFetch('/api/admin?action=staff_help_list', { credentials: 'include' });
+        if (!response.ok) throw new Error(await response.text());
+        overviewHelpRows = await response.json();
+        if (window.ADMIN_SESSION.owner === true) renderOwnerHelpRequests(overviewHelpRows);
+        else renderStaffHelpRequests(overviewHelpRows);
+    } catch (error) {
+        console.error('[staff-help-list]', error);
+        const target = window.ADMIN_SESSION.owner === true ? document.getElementById('owner-help-list') : document.getElementById('staff-help-list');
+        if (target) target.innerHTML = '<p class="text-subtle">طلبات المساعدة هتظهر بعد تجهيز جدولها في Supabase.</p>';
+    }
+}
+
+function renderStaffHelpRequests(rows) {
+    const target = document.getElementById('staff-help-list');
+    if (!target) return;
+    const unread = rows.filter(row => row.status === 'replied' && !row.read_at).length;
+    const badge = document.getElementById('help-unread-badge');
+    if (badge) { badge.hidden = unread === 0; badge.textContent = unread; }
+    if (!rows.length) { target.innerHTML = '<p class="text-subtle">لسه مفيش طلبات مرسلة.</p>'; return; }
+    target.innerHTML = rows.map(row => `<article class="help-item ${row.status === 'replied' && !row.read_at ? 'is-unread' : ''}"><div class="help-item-head"><strong>${safeText(row.subject)}</strong><span>${safeText(row.status === 'replied' ? 'تم الرد' : 'قيد المراجعة')}</span></div><p>${safeText(row.message)}</p>${row.owner_reply || row.owner_reply_image_url ? `<div class="help-reply"><strong>رد المالك</strong>${row.owner_reply ? `<p>${safeText(row.owner_reply)}</p>` : ''}${row.owner_reply_image_url ? `<a href="${safeText(row.owner_reply_image_url)}" target="_blank" rel="noopener noreferrer"><img src="${safeText(row.owner_reply_image_url)}" alt="الصورة التوضيحية من المالك"></a>` : ''}${row.status === 'replied' && !row.read_at ? `<button class="btn btn-ghost btn-sm" data-help-mark-read="${Number(row.id)}" type="button">تمت القراءة</button>` : ''}</div>` : ''}</article>`).join('');
+}
+
+function renderOwnerHelpRequests(rows) {
+    const target = document.getElementById('owner-help-list');
+    if (!target) return;
+    const badge = document.getElementById('help-unread-badge');
+    const pending = rows.filter(row => row.status === 'pending').length;
+    if (badge) { badge.hidden = pending === 0; badge.textContent = pending; }
+    if (!rows.length) { target.innerHTML = '<p class="text-subtle">لا توجد طلبات مساعدة حالياً.</p>'; return; }
+    target.innerHTML = rows.map(row => `<article class="help-item ${row.status === 'pending' ? 'is-unread' : ''}"><div class="help-item-head"><div><strong>${safeText(row.subject)}</strong><small>${safeText(row.staff_name)}${row.staff_phone ? ` — ${safeText(row.staff_phone)}` : ''}</small></div><span>${safeText(row.status === 'pending' ? 'محتاج رد' : 'تم الرد')}</span></div><p>${safeText(row.message)}</p>${row.owner_reply || row.owner_reply_image_url ? `<div class="help-reply"><strong>الرد الحالي</strong>${row.owner_reply ? `<p>${safeText(row.owner_reply)}</p>` : ''}${row.owner_reply_image_url ? `<a href="${safeText(row.owner_reply_image_url)}" target="_blank" rel="noopener noreferrer"><img src="${safeText(row.owner_reply_image_url)}" alt="الصورة المرفقة"></a>` : ''}</div>` : ''}<div class="help-reply-composer" data-help-composer="${Number(row.id)}"><textarea class="form-control" data-help-reply-text="${Number(row.id)}" rows="2" maxlength="2000" placeholder="اكتب ردك أو وضح له النقطة في الصورة..."></textarea><label class="help-image-upload"><i class="fa-solid fa-image"></i><span data-help-file-name="${Number(row.id)}">إرفاق Screenshot</span><input type="file" accept="image/png,image/jpeg,image/webp" data-help-image="${Number(row.id)}"></label><button class="btn btn-primary btn-sm" data-help-reply="${Number(row.id)}" type="button"><i class="fa-solid fa-reply"></i> إرسال الرد</button></div></article>`).join('');
+}
+
+async function submitStaffHelpRequest(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const button = form.querySelector('button[type="submit"]');
+    const subject = document.getElementById('staff-help-subject')?.value.trim();
+    const message = document.getElementById('staff-help-message')?.value.trim();
+    if (!subject || !message) return alert('اكتب عنوان الطلب وتفاصيله.');
+    button.disabled = true;
+    try {
+        const response = await window.adminFetch('/api/admin?action=staff_help_create', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subject, message }) });
+        if (!response.ok) throw new Error(await response.text());
+        form.reset();
+        await loadHelpRequests();
+        alert('تم إرسال طلبك للمالك.');
+    } catch (error) { alert(readableError(error, 'تعذر إرسال طلب المساعدة حالياً.')); }
+    finally { button.disabled = false; }
+}
+
+async function handleStaffHelpClick(event) {
+    const button = event.target.closest('[data-help-mark-read]');
+    if (!button) return;
+    button.disabled = true;
+    const response = await window.adminFetch('/api/admin?action=staff_help_mark_read', { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ request_id: Number(button.dataset.helpMarkRead) }) });
+    if (response.ok) loadHelpRequests(); else button.disabled = false;
+}
+
+async function handleOwnerHelpClick(event) {
+    const fileInput = event.target.closest('[data-help-image]');
+    if (fileInput) {
+        const name = document.querySelector(`[data-help-file-name="${Number(fileInput.dataset.helpImage)}"]`);
+        if (name) name.textContent = fileInput.files?.[0]?.name || 'إرفاق Screenshot';
+        return;
+    }
+    const button = event.target.closest('[data-help-reply]');
+    if (!button) return;
+    const requestId = Number(button.dataset.helpReply);
+    const text = document.querySelector(`[data-help-reply-text="${requestId}"]`)?.value.trim() || '';
+    const file = document.querySelector(`[data-help-image="${requestId}"]`)?.files?.[0];
+    button.disabled = true;
+    try {
+        let imageUrl = null;
+        if (file) imageUrl = await Supabase.upload(file);
+        const response = await window.adminFetch('/api/admin?action=staff_help_reply', { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ request_id: requestId, reply: text, image_url: imageUrl }) });
+        if (!response.ok) throw new Error(await response.text());
+        await loadHelpRequests();
+        alert('تم إرسال الرد للموظف.');
+    } catch (error) { alert(readableError(error, 'تعذر إرسال الرد حالياً.')); }
+    finally { button.disabled = false; }
 }
 
 // ==========================================

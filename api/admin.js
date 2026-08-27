@@ -1,4 +1,4 @@
-const { token, authorize, isPrimaryAdmin, SERVICE_ROLE_KEY, SUPABASE_URL } = require('../lib/admin-session');
+const { token, authorize, getSessionUser, isPrimaryAdmin, isActiveStaff, SERVICE_ROLE_KEY, SUPABASE_URL } = require('../lib/admin-session');
 const { terminateBostaDelivery, deleteBostaPickup } = require('../lib/_server');
 
 const ALLOWED_TABLES = new Set([
@@ -84,12 +84,95 @@ async function saveArchiveEvent(req, payload) {
   throw error;
 }
 
+function validHelpImageUrl(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  try {
+    const url = new URL(raw);
+    return url.protocol === 'https:' ? url.href : null;
+  } catch (_) { return null; }
+}
+
+async function requireActiveSession(req) {
+  const user = await getSessionUser(req);
+  if (!user) return { ok: false, status: 401, user: null };
+  if (!isPrimaryAdmin(user) && !(await isActiveStaff(user))) return { ok: false, status: 401, user: null };
+  return { ok: true, status: 200, user };
+}
+
 module.exports = async (req, res) => {
   const params = req.query || {};
   const table = typeof params.table === 'string' ? params.table : '';
   const action = typeof params.action === 'string' ? params.action : 'select';
   const id = params.id;
   const fn = params.fn;
+
+  if (['staff_help_list', 'staff_help_create', 'staff_help_reply', 'staff_help_mark_read'].includes(action)) {
+    const auth = await requireActiveSession(req);
+    if (!auth.ok) return sendError(res, auth.status, 'Admin session required');
+    const user = auth.user;
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+
+    if (action === 'staff_help_list') {
+      const isOwner = isPrimaryAdmin(user);
+      const ownerFilter = isOwner ? '' : `&staff_auth_user_id=eq.${encodeURIComponent(String(user.id))}`;
+      const result = await upstream(`/rest/v1/staff_help_requests?select=*&order=created_at.desc&limit=200${ownerFilter}`, 'GET', req, undefined, '');
+      res.status(result.response.status);
+      return result.text ? res.send(result.text) : res.end();
+    }
+
+    if (action === 'staff_help_create') {
+      if (isPrimaryAdmin(user)) return sendError(res, 403, 'طلبات المساعدة مخصصة للموظفين.');
+      const staffId = Number(user.app_metadata?.staff_id);
+      if (!Number.isInteger(staffId) || staffId <= 0) return sendError(res, 403, 'بيانات الموظف غير مكتملة.');
+      const subject = String(body.subject || '').trim().slice(0, 120);
+      const message = String(body.message || '').trim().slice(0, 2000);
+      if (subject.length < 3) return sendError(res, 422, 'اكتب عنواناً واضحاً للطلب.');
+      if (message.length < 5) return sendError(res, 422, 'اكتب تفاصيل الطلب بوضوح.');
+      const staffResult = await upstream(`/rest/v1/staff_accounts?id=eq.${staffId}&select=id,phone,display_name,auth_user_id&limit=1`, 'GET', req, undefined, '');
+      if (!staffResult.response.ok) { res.status(staffResult.response.status); return staffResult.text ? res.send(staffResult.text) : res.end(); }
+      const staff = JSON.parse(staffResult.text || '[]')?.[0];
+      if (!staff || String(staff.auth_user_id || '') !== String(user.id)) return sendError(res, 403, 'الموظف غير فعال أو غير معروف.');
+      const payload = {
+        staff_id: staff.id,
+        staff_auth_user_id: user.id,
+        staff_name: String(staff.display_name || user.user_metadata?.display_name || user.email || 'موظف').slice(0, 120),
+        staff_phone: String(staff.phone || '').slice(0, 32) || null,
+        subject,
+        message,
+        status: 'pending'
+      };
+      const result = await upstream('/rest/v1/staff_help_requests', 'POST', req, payload, 'return=representation');
+      res.status(result.response.status);
+      return result.text ? res.send(result.text) : res.end();
+    }
+
+    const requestId = Number(body.request_id);
+    if (!Number.isInteger(requestId) || requestId <= 0) return sendError(res, 400, 'رقم طلب المساعدة غير صحيح.');
+    const requestResult = await upstream(`/rest/v1/staff_help_requests?id=eq.${requestId}&select=*`, 'GET', req, undefined, '');
+    if (!requestResult.response.ok) { res.status(requestResult.response.status); return requestResult.text ? res.send(requestResult.text) : res.end(); }
+    const requestRow = JSON.parse(requestResult.text || '[]')?.[0];
+    if (!requestRow) return sendError(res, 404, 'طلب المساعدة غير موجود.');
+
+    if (action === 'staff_help_mark_read') {
+      if (isPrimaryAdmin(user) || String(requestRow.staff_auth_user_id || '') !== String(user.id)) return sendError(res, 403, 'لا يمكنك تحديث هذا الطلب.');
+      const result = await upstream(`/rest/v1/staff_help_requests?id=eq.${requestId}`, 'PATCH', req, { read_at: new Date().toISOString() });
+      res.status(result.response.status);
+      return result.text ? res.send(result.text) : res.end();
+    }
+
+    if (!isPrimaryAdmin(user)) return sendError(res, 403, 'الرد على طلبات المساعدة متاح للمالك فقط.');
+    const reply = String(body.reply || '').trim().slice(0, 2000);
+    const imageUrl = validHelpImageUrl(body.image_url);
+    if (reply.length < 2 && !imageUrl) return sendError(res, 422, 'اكتب الرد أو أرفق صورة توضيحية.');
+    if (body.image_url && !imageUrl) return sendError(res, 422, 'رابط الصورة غير صحيح.');
+    const result = await upstream(`/rest/v1/staff_help_requests?id=eq.${requestId}`, 'PATCH', req, {
+      status: 'replied', owner_reply: reply || null, owner_reply_image_url: imageUrl,
+      replied_by: user.id, replied_at: new Date().toISOString(), read_at: null
+    });
+    res.status(result.response.status);
+    return result.text ? res.send(result.text) : res.end();
+  }
 
   if (action === 'rpc') {
     if (!ALLOWED_RPCS.has(fn)) return sendError(res, 400, 'Unsupported RPC');

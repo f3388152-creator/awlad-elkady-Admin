@@ -109,17 +109,61 @@
 
                 <!-- OVERVIEW -->
                 <section id="view-overview" class="view-pane active">
+                    <div class="overview-heading glass-panel">
+                        <div>
+                            <span class="overview-kicker"><i class="fa-solid fa-chart-line"></i> متابعة لحظية</span>
+                            <h2>مركز متابعة المعرض</h2>
+                            <p>الإحصائيات والرسوم بتظهر حسب الصلاحيات الممنوحة لكل حساب.</p>
+                        </div>
+                        <div class="overview-actions">
+                            <button class="btn btn-ghost btn-sm" id="staff-help-open" type="button" hidden><i class="fa-solid fa-circle-question"></i> طلب مساعدة</button>
+                            <button class="btn btn-primary btn-sm help-owner-btn" id="owner-help-open" type="button" hidden><i class="fa-solid fa-inbox"></i> طلبات الموظفين <span class="notification-badge" id="help-unread-badge" hidden>0</span></button>
+                        </div>
+                    </div>
                     <div class="overview-grid" id="overview-stats">
-                        <div class="stat-card glass-panel"><span>الطلبات الجديدة</span><strong id="stat-new-orders">0</strong></div>
-                        <div class="stat-card glass-panel"><span>إجمالي المنتجات</span><strong id="stat-products">0</strong></div>
-                        <div class="stat-card glass-panel"><span>الأقسام</span><strong id="stat-categories">0</strong></div>
-                        <div class="stat-card glass-panel"><span>الشكاوى المعلقة</span><strong id="stat-open-complaints">0</strong></div>
-                        <div class="stat-card glass-panel"><span>مخزون منخفض</span><strong id="stat-low-stock">0</strong></div>
+                        <div class="stat-card glass-panel" data-overview-permission="orders.view"><span><i class="fa-solid fa-cart-shopping"></i> الطلبات الجديدة</span><strong id="stat-new-orders">0</strong></div>
+                        <div class="stat-card glass-panel" data-overview-permission="orders.view"><span><i class="fa-solid fa-money-bill-wave"></i> إجمالي المبيعات</span><strong id="stat-revenue">0</strong></div>
+                        <div class="stat-card glass-panel" data-overview-permission="products.view"><span><i class="fa-solid fa-box"></i> إجمالي المنتجات</span><strong id="stat-products">0</strong></div>
+                        <div class="stat-card glass-panel" data-overview-permission="categories.view"><span><i class="fa-solid fa-layer-group"></i> الأقسام</span><strong id="stat-categories">0</strong></div>
+                        <div class="stat-card glass-panel" data-overview-permission="complaints.view"><span><i class="fa-solid fa-headset"></i> الشكاوى المعلقة</span><strong id="stat-open-complaints">0</strong></div>
+                        <div class="stat-card glass-panel" data-overview-permission="products.view"><span><i class="fa-solid fa-triangle-exclamation"></i> مخزون منخفض</span><strong id="stat-low-stock">0</strong></div>
                     </div>
-                    <div class="glass-panel overview-note">
-                        <h2>مركز متابعة المعرض</h2>
-                        <p>الأرقام دي بتتحدث تلقائياً مع بيانات الطلبات والمنتجات والشكاوى.</p>
+                    <div id="overview-no-access" class="glass-panel overview-empty" hidden>
+                        <i class="fa-solid fa-chart-simple"></i>
+                        <h3>لا توجد إحصائيات مرتبطة بصلاحيات حسابك حالياً</h3>
+                        <p>المالك يقدر يضيف لك صلاحية القسم المناسب من إدارة الموظفين.</p>
                     </div>
+                    <div class="overview-charts" id="overview-charts">
+                        <article class="overview-chart-card glass-panel" data-overview-permission="orders.view">
+                            <div class="chart-card-heading"><div><span class="chart-kicker">الأداء</span><h3>حركة الطلبات آخر 7 أيام</h3></div><i class="fa-solid fa-chart-line"></i></div>
+                            <div class="chart-canvas" id="orders-trend-chart"></div>
+                        </article>
+                        <article class="overview-chart-card glass-panel" data-overview-permission="orders.view">
+                            <div class="chart-card-heading"><div><span class="chart-kicker">الحالة</span><h3>توزيع حالات الطلبات</h3></div><i class="fa-solid fa-chart-pie"></i></div>
+                            <div class="status-bars" id="orders-status-chart"></div>
+                        </article>
+                        <article class="overview-chart-card glass-panel" data-overview-permission="products.view">
+                            <div class="chart-card-heading"><div><span class="chart-kicker">المخزون</span><h3>أكثر المنتجات احتياجاً للمتابعة</h3></div><i class="fa-solid fa-boxes-stacked"></i></div>
+                            <div class="stock-bars" id="stock-chart"></div>
+                        </article>
+                        <article class="overview-chart-card glass-panel" data-overview-permission="complaints.view">
+                            <div class="chart-card-heading"><div><span class="chart-kicker">خدمة العملاء</span><h3>الشكاوى حسب الحالة</h3></div><i class="fa-solid fa-comments"></i></div>
+                            <div class="status-bars" id="complaints-status-chart"></div>
+                        </article>
+                    </div>
+                    <div class="overview-note glass-panel"><i class="fa-solid fa-rotate"></i> الأرقام والرسوم بتتحدث تلقائياً مع بيانات النظام، ومن غير بيانات وهمية.</div>
+                    <section class="staff-help-panel glass-panel" id="staff-help-panel" hidden>
+                        <div class="panel-heading"><div><span class="chart-kicker">مراسلة المالك</span><h3>عندك استفسار عن أي رقم؟</h3></div><button class="icon-btn" id="staff-help-close" type="button" aria-label="إغلاق نموذج المساعدة"><i class="fa-solid fa-xmark"></i></button></div>
+                        <form id="staff-help-form" class="staff-help-form">
+                            <div class="form-grid cols-2"><div class="form-group"><label for="staff-help-subject">عنوان الطلب</label><input class="form-control" id="staff-help-subject" maxlength="120" required placeholder="مثلاً: محتاج توضيح رقم الطلبات"></div><div class="form-group"><label for="staff-help-message">التفاصيل</label><textarea class="form-control" id="staff-help-message" rows="3" maxlength="2000" required placeholder="اكتب النقطة اللي محتاج توضيحها من المالك"></textarea></div></div>
+                            <button class="btn btn-primary" type="submit"><i class="fa-solid fa-paper-plane"></i> إرسال للمالك</button>
+                        </form>
+                        <div id="staff-help-list" class="help-list"></div>
+                    </section>
+                    <section class="owner-help-panel glass-panel" id="owner-help-panel" hidden>
+                        <div class="panel-heading"><div><span class="chart-kicker">صندوق الطلبات</span><h3>طلبات الموظفين</h3></div><button class="icon-btn" id="owner-help-close" type="button" aria-label="إغلاق طلبات الموظفين"><i class="fa-solid fa-xmark"></i></button></div>
+                        <div id="owner-help-list" class="help-list"></div>
+                    </section>
                 </section>
 
                 <!-- SECTION 1: ORDERS & BOSTA EXPORT -->
