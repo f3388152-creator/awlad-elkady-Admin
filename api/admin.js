@@ -407,6 +407,30 @@ module.exports = async (req, res) => {
     }
   }
 
+  if (action === 'delete_product_permanent') {
+    const entityId = Number(req.body?.id || id);
+    if (!Number.isInteger(entityId) || entityId <= 0) return sendError(res, 400, 'معرف المنتج غير صحيح.');
+    const auth = await authorize(req, 'products.view');
+    if (!auth.ok) return sendError(res, auth.status, auth.status === 401 ? 'Admin session required' : 'Permission denied');
+    if (!isPrimaryAdmin(auth.user)) return sendError(res, 403, 'الحذف النهائي للمنتج متاح للمالك فقط.');
+    try {
+      const existingResult = await upstream(`/rest/v1/products?id=eq.${encodeURIComponent(String(entityId))}&select=id,is_archived,images`, 'GET', req, undefined, '');
+      if (!existingResult.response.ok) { res.status(existingResult.response.status); return existingResult.text ? res.send(existingResult.text) : res.end(); }
+      const existing = JSON.parse(existingResult.text || '[]')?.[0];
+      if (!existing) return sendError(res, 404, 'المنتج غير موجود.');
+      if (existing.is_archived !== true) return sendError(res, 409, 'يجب أرشفة المنتج أولاً قبل الحذف النهائي.');
+      const linksResult = await upstream(`/rest/v1/product_categories?product_id=eq.${encodeURIComponent(String(entityId))}`, 'DELETE', req, undefined, 'return=minimal');
+      if (!linksResult.response.ok) { res.status(linksResult.response.status); return linksResult.text ? res.send(linksResult.text) : res.end(); }
+      const deleted = await upstream(`/rest/v1/products?id=eq.${encodeURIComponent(String(entityId))}`, 'DELETE', req, undefined, 'return=minimal');
+      if (!deleted.response.ok) { res.status(deleted.response.status); return deleted.text ? res.send(deleted.text) : res.end(); }
+      try { await createNotification({ recipient_scope: 'all_admins', event_type: 'product.deleted_permanently', title: 'تم حذف منتج نهائياً', body: `تم حذف المنتج #${entityId} نهائياً بواسطة المالك.`, url: '/#products', data: { product_id: entityId } }); } catch (notificationError) { console.error('[product-delete-notification]', notificationError.message); }
+      return res.status(200).json({ ok: true, action: 'delete_product_permanent', id: entityId });
+    } catch (error) {
+      console.error('[delete-product-permanent]', error.message, error.data || '');
+      return sendError(res, error.status || 500, 'تعذر الحذف النهائي للمنتج حالياً.');
+    }
+  }
+
   if (['archive_product', 'restore_product', 'archive_complaint', 'restore_complaint'].includes(action)) {
     const body = req.body && typeof req.body === 'object' ? req.body : {};
     const entityId = Number(body.id || id);
@@ -498,6 +522,7 @@ module.exports = async (req, res) => {
   if (!permission) return sendError(res, 400, 'Unsupported action');
   const auth = await authorize(req, permission);
   if (!auth.ok) return sendError(res, auth.status, auth.status === 401 ? 'Admin session required' : 'Permission denied');
+  if (table === 'products' && action === 'delete' && !isPrimaryAdmin(auth.user)) return sendError(res, 403, 'الحذف النهائي للمنتج متاح للمالك فقط.');
 
   if (action === 'select') {
     const query = typeof params.query === 'string' ? params.query : '';

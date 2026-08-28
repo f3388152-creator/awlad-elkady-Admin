@@ -160,15 +160,89 @@ function can(permission) {
     return session.owner === true || session.permissions?.['*'] === true || session.permissions?.[permission] === true;
 }
 
+function canAny(permissions) {
+    return (permissions || []).some(permission => can(permission));
+}
+
+function setPermissionVisibility(selector, permission, visibleWhenOwner = true) {
+    const allowed = Array.isArray(permission) ? canAny(permission) : can(permission);
+    document.querySelectorAll(selector).forEach(element => {
+        element.hidden = visibleWhenOwner ? !allowed : !(window.ADMIN_SESSION?.owner === true || allowed);
+    });
+}
+
+function applySettingsVisibility() {
+    const session = window.ADMIN_SESSION || {};
+    const landingVisible = can('landing.view');
+    const adminVisible = session.owner === true;
+    const settingsNav = document.querySelector('.nav-item[data-target="settings"]');
+    if (settingsNav) settingsNav.hidden = !landingVisible && !adminVisible;
+
+    const landingScope = document.querySelector('[data-settings-scope="landing"]');
+    const adminScope = document.querySelector('[data-settings-scope="admin"]');
+    if (landingScope) landingScope.hidden = !landingVisible;
+    if (adminScope) adminScope.hidden = !adminVisible;
+
+    const tabPermissions = {
+        'tab-identity': ['landing.edit_identity', 'landing.edit'],
+        'tab-content': ['landing.edit_content', 'landing.edit'],
+        'tab-contact': ['landing.edit_contact', 'landing.edit'],
+        'tab-faq': ['landing.edit_faq', 'landing.edit'],
+        'tab-shipping': ['landing.edit_shipping', 'landing.edit'],
+        'tab-bosta': ['landing.edit_bosta', 'landing.edit'],
+        'tab-maintenance': ['landing.edit_maintenance', 'landing.edit']
+    };
+    Object.entries(tabPermissions).forEach(([tabId, permissions]) => {
+        const tab = document.querySelector(`[data-tab="${tabId}"]`);
+        const pane = document.getElementById(tabId);
+        const visible = landingVisible && canAny(permissions);
+        if (tab) tab.hidden = !visible;
+        if (pane) pane.hidden = !visible;
+        if (visible && pane) {
+            pane.querySelectorAll('input, textarea, select, button').forEach(control => {
+                if (!control.closest('.settings-sidebar')) control.disabled = !canAny(permissions);
+            });
+        }
+    });
+
+    const adminPane = document.getElementById('admin-settings-pane');
+    if (adminPane) adminPane.hidden = !adminVisible;
+    if (!landingVisible && adminVisible) {
+        landingScope?.classList.remove('active');
+        adminScope?.classList.add('active');
+        document.getElementById('landing-settings-pane')?.classList.add('hidden');
+        adminPane?.classList.remove('hidden');
+    }
+    const actionPermissions = {
+        '#open-add-product-modal': 'products.create',
+        '#open-add-category-modal': 'categories.create',
+        '#export-bosta-btn': 'orders.export',
+        '#open-add-faq-modal': ['landing.edit_faq', 'landing.edit'],
+        '#add-social-link-btn': ['landing.edit_contact', 'landing.edit'],
+        '#save-identity-btn': ['landing.edit_identity', 'landing.edit'],
+        '#save-content-btn': ['landing.edit_content', 'landing.edit'],
+        '#save-contact-btn': ['landing.edit_contact', 'landing.edit'],
+        '#save-shipping-setting-btn': ['landing.edit_shipping', 'landing.edit'],
+        '#save-bosta-setting-btn': ['landing.edit_bosta', 'landing.edit'],
+        '#save-maintenance-btn': ['landing.edit_maintenance', 'landing.edit'],
+        '#open-shipping-calc': 'bosta.create',
+        '#resolve-complaint-btn': 'complaints.update_status'
+    };
+    Object.entries(actionPermissions).forEach(([selector, permission]) => setPermissionVisibility(selector, permission));
+    setPermissionVisibility('#filter-products-archived', '*', false);
+    setPermissionVisibility('#filter-complaints-archived', '*', false);
+}
+
 function applySessionPermissions() {
     const session = window.ADMIN_SESSION || {};
-    const navPermissions = { orders: 'orders.view', products: 'products.view', categories: 'categories.view', complaints: 'complaints.view', settings: 'landing.view' };
+    const navPermissions = { orders: 'orders.view', products: 'products.view', categories: 'categories.view', complaints: 'complaints.view' };
     document.querySelectorAll('.nav-item[data-target]').forEach(item => {
         const permission = navPermissions[item.dataset.target];
         if (permission) item.hidden = !can(permission);
     });
     const panel = document.getElementById('staff-management-panel');
     if (panel) panel.hidden = session.owner !== true;
+    applySettingsVisibility();
     if (session.owner === true) initStaffManagement();
     initBostaPickupControl();
     initOverviewTools();
@@ -200,8 +274,6 @@ function resetStaffForm() {
     form?.reset();
     const id = document.getElementById('staff-id'); if (id) id.value = '';
     const active = document.getElementById('staff-active'); if (active) active.checked = true;
-    const sessionEnabled = document.getElementById('staff-session-enabled'); if (sessionEnabled) sessionEnabled.checked = true;
-    const sessionMinutes = document.getElementById('staff-session-minutes'); if (sessionMinutes) sessionMinutes.value = '60';
     fillStaffPermissions({});
 }
 
@@ -214,8 +286,6 @@ window.editStaff = function(id) {
     document.getElementById('staff-name').value = staff.display_name || '';
     document.getElementById('staff-password').value = '';
     document.getElementById('staff-active').checked = staff.is_active !== false;
-    document.getElementById('staff-session-enabled').checked = staff.session_enabled !== false;
-    document.getElementById('staff-session-minutes').value = staff.session_minutes || 60;
     fillStaffPermissions(staff.permissions || {});
     document.getElementById('staff-management-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 };
@@ -247,7 +317,7 @@ function renderStaffList(rows) {
     const target = document.getElementById('staff-list');
     if (!target) return;
     if (!rows.length) { target.innerHTML = '<p class="text-subtle">لا يوجد موظفون مضافون حالياً.</p>'; return; }
-    target.innerHTML = `<div class="table-responsive"><table class="data-table"><thead><tr><th>الاسم</th><th>الموبايل</th><th>الحالة</th><th>الجلسة</th><th>إجراء</th></tr></thead><tbody>${rows.map(row => `<tr><td>${safeText(row.display_name)}</td><td dir="ltr">${safeText(row.phone)}</td><td>${row.is_active === false ? '<span class="status-badge status-danger">موقوف</span>' : '<span class="status-badge status-success">نشط</span>'}</td><td>${row.session_enabled === false ? 'جلسة ممتدة (تجديد تلقائي)' : `${Number(row.session_minutes) || 60} دقيقة`}</td><td><button class="btn btn-secondary btn-sm" type="button" onclick="editStaff('${safeText(row.id)}')">تعديل</button><button class="btn btn-secondary btn-sm" type="button" onclick="toggleStaff('${safeText(row.id)}', ${row.is_active === false})">${row.is_active === false ? 'تفعيل' : 'إيقاف'}</button><button class="btn btn-danger btn-sm" type="button" onclick="deleteStaffAccount('${safeText(row.id)}')">حذف نهائي</button></td></tr>`).join('')}</tbody></table></div>`;
+        target.innerHTML = `<div class="table-responsive"><table class="data-table"><thead><tr><th>الاسم</th><th>الموبايل</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody>${rows.map(row => `<tr><td>${safeText(row.display_name)}</td><td dir="ltr">${safeText(row.phone)}</td><td>${row.is_active === false ? '<span class="status-badge status-danger">موقوف</span>' : '<span class="status-badge status-success">نشط</span>'}</td><td><button class="btn btn-secondary btn-sm" type="button" onclick="editStaff('${safeText(row.id)}')">تعديل</button><button class="btn btn-secondary btn-sm" type="button" onclick="toggleStaff('${safeText(row.id)}', ${row.is_active === false})">${row.is_active === false ? 'تفعيل' : 'إيقاف'}</button><button class="btn btn-danger btn-sm" type="button" onclick="deleteStaffAccount('${safeText(row.id)}')">حذف نهائي</button></td></tr>`).join('')}</tbody></table></div>`;
 }
 
 function staffOperationMessage(data = {}) {
@@ -297,19 +367,10 @@ function initStaffManagement() {
         staffPasswordToggle.dataset.bound = '1';
     }
     document.getElementById('staff-reset-btn')?.addEventListener('click', () => { resetStaffForm(); document.getElementById('staff-phone').disabled = false; });
-    document.getElementById('apply-staff-global-session')?.addEventListener('click', async () => {
-        const enabled = document.getElementById('staff-global-session-enabled')?.checked;
-        const minutes = Number(document.getElementById('staff-global-session-minutes')?.value) || 60;
-        if (minutes < 15 || minutes > 43200) return alert('المدة لازم تكون بين 15 دقيقة و30 يوم.');
-        const response = await window.adminFetch('/api/admin-staff?scope=all', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_enabled: enabled, session_minutes: minutes }) });
-        if (!response.ok) return alert('تعذر تطبيق إعداد الجلسة على الموظفين.');
-        await loadStaffList();
-        alert('تم تطبيق إعداد الجلسة على كل الموظفين.');
-    });
     form?.addEventListener('submit', async event => {
         event.preventDefault();
         const id = document.getElementById('staff-id')?.value;
-        const payload = { phone: document.getElementById('staff-phone')?.value, display_name: document.getElementById('staff-name')?.value, password: document.getElementById('staff-password')?.value, is_active: document.getElementById('staff-active')?.checked, session_enabled: document.getElementById('staff-session-enabled')?.checked, session_minutes: Number(document.getElementById('staff-session-minutes')?.value) || 60, permissions: staffPermissionsFromForm() };
+        const payload = { phone: document.getElementById('staff-phone')?.value, display_name: document.getElementById('staff-name')?.value, password: document.getElementById('staff-password')?.value, is_active: document.getElementById('staff-active')?.checked, permissions: staffPermissionsFromForm() };
         if (id && !payload.password) delete payload.password;
         const response = await window.adminFetch(id ? `/api/admin-staff?id=${encodeURIComponent(id)}` : '/api/admin-staff', { method: id ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         if (!response.ok) { let data = {}; try { data = await response.json(); } catch (_) {} return alert(staffOperationMessage(data)); }
@@ -323,7 +384,12 @@ function initStaffManagement() {
 async function startProtectedSystems() {
     if (protectedSystemsStarted) return;
     protectedSystemsStarted = true;
-    await Promise.allSettled([initOrdersSystem(), initProductsAndCategories(), initComplaintsSystem(), initSiteSettings()]);
+    const tasks = [];
+    if (can('orders.view')) tasks.push(initOrdersSystem());
+    if (can('products.view') || can('categories.view')) tasks.push(initProductsAndCategories());
+    if (can('complaints.view')) tasks.push(initComplaintsSystem());
+    if (can('landing.view')) tasks.push(initSiteSettings());
+    await Promise.allSettled(tasks);
     await refreshDashboardData();
     setInterval(refreshDashboardData, 30000);
 }
@@ -352,11 +418,9 @@ function initAdminSettings() {
     const key = 'awlad_admin_preferences';
     let saved = {};
     try { saved = JSON.parse(localStorage.getItem(key) || '{}'); } catch (_) {}
-    const minutes = document.getElementById('admin-session-minutes');
     const pageSize = document.getElementById('admin-page-size');
     const showCalc = document.getElementById('admin-show-shipping-calc');
     const enableExcel = document.getElementById('admin-enable-excel');
-    if (minutes) minutes.value = saved.sessionMinutes || 60;
     if (pageSize) pageSize.value = saved.pageSize || 12;
     if (showCalc) showCalc.checked = saved.showShippingCalc !== false;
     if (enableExcel) enableExcel.checked = saved.enableExcel !== false;
@@ -368,7 +432,7 @@ function initAdminSettings() {
     };
     apply();
     document.getElementById('save-admin-settings-btn')?.addEventListener('click', () => {
-        const prefs = { sessionMinutes: Number(minutes?.value) || 60, pageSize: Number(pageSize?.value) || 12, showShippingCalc: !!showCalc?.checked, enableExcel: !!enableExcel?.checked };
+        const prefs = { pageSize: Number(pageSize?.value) || 12, showShippingCalc: !!showCalc?.checked, enableExcel: !!enableExcel?.checked };
         localStorage.setItem(key, JSON.stringify(prefs));
         apply();
         alert('تم حفظ إعدادات اللوحة بنجاح.');
@@ -379,7 +443,11 @@ async function refreshDashboardData() {
     if (document.querySelector('.modal-overlay:not(.hidden)')) return;
     try {
         const [orders, complaints, products, categories, links] = await Promise.all([
-            sb_fetch('orders'), sb_fetch('complaints'), sb_fetch('products'), sb_fetch('categories'), Supabase.select('product_categories').catch(() => [])
+            can('orders.view') ? sb_fetch('orders') : Promise.resolve([]),
+            can('complaints.view') ? sb_fetch('complaints') : Promise.resolve([]),
+            can('products.view') ? sb_fetch('products') : Promise.resolve([]),
+            can('categories.view') ? sb_fetch('categories') : Promise.resolve([]),
+            can('products.view') || can('categories.view') ? Supabase.select('product_categories').catch(() => []) : Promise.resolve([])
         ]);
         sampleOrders = orders || [];
         sampleComplaints = complaints || [];
@@ -622,6 +690,11 @@ function initNavigation() {
             item.classList.add('active');
 
             const target = item.getAttribute('data-target');
+            const navPermissions = { orders: 'orders.view', products: 'products.view', categories: 'categories.view', complaints: 'complaints.view', settings: 'landing.view' };
+            if (target && navPermissions[target] && !can(navPermissions[target])) {
+                item.classList.remove('active');
+                return;
+            }
             if (target) {
                 viewPanes.forEach(p => p.classList.remove('active'));
                 const activePane = document.getElementById('view-' + target);
@@ -920,9 +993,7 @@ function renderOrders(orders) {
                     <div>
                         <span class="text-subtle text-sm block mb-1">الشحن (تعديل يدوي):</span>
                         <div class="flex-align gap-1">
-                            <input type="number" class="editable-shipping-input"
-                                value="${(o.shipping||0).toFixed(2)}"
-                                onchange="updateOrderShipping('${o.id}', ${idx}, this.value)">
+                            ${can('orders.update_customer') ? `<input type="number" class="editable-shipping-input" value="${(o.shipping||0).toFixed(2)}" onchange="updateOrderShipping('${o.id}', ${idx}, this.value)">` : `<span class="text-subtle text-sm">${(o.shipping||0).toFixed(2)}</span>`}
                             <span class="text-subtle text-sm">ج.م</span>
                         </div>
                         <span class="text-subtle text-sm block mt-1" style="font-size:0.72rem;">عقد أسوان بوسطة</span>
@@ -1074,7 +1145,13 @@ window.updateOrderShipping = async function(orderId, idx, newShippingVal) {
 // ==========================================
 
 async function initProductsAndCategories() {
-    const [rawProducts, categories, links] = await Promise.all([sb_fetch('products'), sb_fetch('categories'), Supabase.select('product_categories').catch(() => [])]);
+    const canProducts = can('products.view');
+    const canCategories = can('categories.view');
+    const [rawProducts, categories, links] = await Promise.all([
+        canProducts ? sb_fetch('products') : Promise.resolve([]),
+        canCategories ? sb_fetch('categories') : Promise.resolve([]),
+        canProducts || canCategories ? Supabase.select('product_categories').catch(() => []) : Promise.resolve([])
+    ]);
     sampleCategories = categories || [];
     sampleProducts = attachProductCategories(rawProducts || [], links || []);
     renderProducts(sampleProducts);
@@ -1310,6 +1387,7 @@ function renderProducts(products) {
             ? (window.ADMIN_SESSION?.owner === true ? `<button class="btn btn-primary btn-sm" onclick="restoreProduct(${Number(p.id)})"><i class="fa-solid fa-rotate-left"></i> استرجاع</button>` : '')
             : (can('products.delete') ? `<button class="btn btn-danger-ghost btn-sm" onclick="archiveProduct(${Number(p.id)})"><i class="fa-solid fa-box-archive"></i> أرشفة</button>` : '');
         const archiveMeta = p.is_archived ? `<p class="text-danger text-sm mb-2"><strong>مؤرشف:</strong> ${safeText(p.archive_reason || 'بدون سبب مسجل')} ${p.archived_by ? ` · بواسطة ${safeText(p.archived_by)}` : ''}</p>` : '';
+        const permanentDeleteAction = p.is_archived && window.ADMIN_SESSION?.owner === true ? `<button class="btn btn-danger btn-sm" onclick="deleteProductPermanently(${Number(p.id)})"><i class="fa-solid fa-trash-can"></i> حذف نهائي</button>` : '';
         return `<div class="product-card${p.is_active === false || p.is_archived ? ' opacity-50' : ''}">
             <div class="product-thumb-container" style="position:relative;background:#f1f5f2;border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center;min-height:120px;">${thumbHtml}
                 <div class="badge-overlay-container" style="position:absolute;top:6px;right:6px;display:flex;flex-direction:column;gap:4px;">
@@ -1322,7 +1400,7 @@ function renderProducts(products) {
                 <span class="text-subtle text-sm mb-2">SKU: ${safeText(p.sku || '—')} | بوسطة: ${Number(p.bostaSize || 0)} ج</span>
                 <p class="text-subtle text-sm mb-3" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${safeText(p.desc || '')}</p>${archiveMeta}
                 <div class="flex-between mt-auto"><div><strong class="text-primary text-lg">${sale ?? Number(p.price || 0)} ج.م</strong>${sale ? `<span class="text-subtle text-sm" style="text-decoration:line-through;">${Number(p.price)} ج</span>` : ''}</div><span class="text-sm font-bold ${isLowStock ? 'text-danger' : 'text-emerald'}">${Number(p.stock)} قطعة</span></div>
-                <div class="product-card-actions"><button class="btn btn-ghost btn-sm" onclick="editProduct(${Number(p.id)})"><i class="fa-solid fa-pen"></i> تعديل</button>${!p.is_archived ? `<button class="btn btn-ghost btn-sm" title="${p.is_active ? 'إخفاء' : 'إظهار'}" onclick="toggleProductVisibility(${Number(p.id)}, ${!p.is_active})"><i class="fa-solid ${p.is_active ? 'fa-eye-slash' : 'fa-eye'}"></i></button>` : ''}${archiveAction}</div>
+                <div class="product-card-actions">${can('products.update') ? `<button class="btn btn-ghost btn-sm" onclick="editProduct(${Number(p.id)})"><i class="fa-solid fa-pen"></i> تعديل</button>` : ''}${can('products.update') && !p.is_archived ? `<button class="btn btn-ghost btn-sm" title="${p.is_active ? 'إخفاء' : 'إظهار'}" onclick="toggleProductVisibility(${Number(p.id)}, ${!p.is_active})"><i class="fa-solid ${p.is_active ? 'fa-eye-slash' : 'fa-eye'}"></i></button>` : ''}${archiveAction}${permanentDeleteAction}</div>
             </div></div>`;
     }).join('');
 }
@@ -1333,7 +1411,7 @@ function renderCategories(categories) {
     if (!categories || categories.length === 0) { container.innerHTML = `<div class="glass-panel p-4 text-center text-subtle w-full" style="grid-column:1/-1">لا توجد أقسام مضافة حتى الآن.</div>`; return; }
     container.innerHTML = categories.map(c => {
         const image = c.image_url || 'assets/images/logo.png';
-        return `<div class="category-card glass-panel"><div class="category-card-main"><img class="category-card-thumb" src="${safeText(image)}" alt="${safeText(c.name)}" onerror="this.onerror=null;this.src='assets/images/logo.png'"><div><strong class="text-primary block font-bold text-lg">${safeText(c.name)}</strong><span class="text-subtle text-sm">${safeText(c.desc || c.description || '')}</span></div></div><div class="flex-align gap-2"><button class="btn btn-ghost btn-sm" onclick="editCategory(${Number(c.id)})"><i class="fa-solid fa-pen"></i></button><button class="btn btn-danger-ghost btn-sm" onclick="deleteCategory(${Number(c.id)})"><i class="fa-solid fa-trash"></i></button></div></div>`;
+        return `<div class="category-card glass-panel"><div class="category-card-main"><img class="category-card-thumb" src="${safeText(image)}" alt="${safeText(c.name)}" onerror="this.onerror=null;this.src='assets/images/logo.png'"><div><strong class="text-primary block font-bold text-lg">${safeText(c.name)}</strong><span class="text-subtle text-sm">${safeText(c.desc || c.description || '')}</span></div></div><div class="flex-align gap-2">${can('categories.update') ? `<button class="btn btn-ghost btn-sm" onclick="editCategory(${Number(c.id)})"><i class="fa-solid fa-pen"></i></button>` : ''}${can('categories.delete') ? `<button class="btn btn-danger-ghost btn-sm" onclick="deleteCategory(${Number(c.id)})"><i class="fa-solid fa-trash"></i></button>` : ''}</div></div>`;
     }).join('');
 }
 
@@ -1475,6 +1553,20 @@ async function archiveEntity(action, id, label) {
 
 window.archiveProduct = id => archiveEntity('archive_product', id, 'أرشفة المنتج ومراجعة الشحنات المرتبطة');
 window.restoreProduct = id => window.ADMIN_SESSION?.owner === true ? archiveEntity('restore_product', id, 'استرجاع المنتج') : alert('استرجاع الأرشيف متاح للمالك فقط.');
+window.deleteProductPermanently = async function(id) {
+    if (window.ADMIN_SESSION?.owner !== true) return alert('الحذف النهائي متاح للمالك فقط.');
+    if (!window.confirm('تحذير: سيتم حذف المنتج نهائياً من قاعدة البيانات ولا يمكن استرجاعه. هل تريد المتابعة؟')) return;
+    try {
+        const response = await window.adminFetch(`/api/admin?action=delete_product_permanent&id=${encodeURIComponent(id)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || 'تعذر الحذف النهائي للمنتج');
+        await refreshDashboardData();
+        alert('تم حذف المنتج نهائياً.');
+    } catch (error) {
+        alert(readableError(error, 'تعذر الحذف النهائي للمنتج حالياً.'));
+        console.error('[delete-product-permanent]', error);
+    }
+};
 
 window.toggleProductVisibility = async function(id, newActive) {
     try {
@@ -1920,7 +2012,7 @@ function renderSocialLinks() {
     list.innerHTML = sampleSocials.map(s => `
         <div class="card-item flex-between">
             <div class="flex-align gap-3"><i class="${safeText(s.icon || 'fa-solid fa-link')} text-primary text-lg"></i><div><strong class="text-dark block">${safeText(s.name)}</strong><span class="text-subtle text-sm">${safeText(s.link)}</span></div></div>
-            <div class="flex-align gap-3"><label class="switch-toggle" title="إظهار/إخفاء"><input type="checkbox" ${s.visible ? 'checked' : ''} onchange="toggleSocialVisible(${Number(s.id)})"><span class="slider"></span></label><button class="btn btn-ghost btn-sm" onclick="editSocial(${Number(s.id)})"><i class="fa-solid fa-pen"></i></button><button class="btn btn-danger-ghost btn-sm" onclick="deleteSocial(${Number(s.id)})"><i class="fa-solid fa-trash"></i></button></div>
+            <div class="flex-align gap-3">${canAny(['landing.edit_contact', 'landing.edit']) ? `<label class="switch-toggle" title="إظهار/إخفاء"><input type="checkbox" ${s.visible ? 'checked' : ''} onchange="toggleSocialVisible(${Number(s.id)})"><span class="slider"></span></label><button class="btn btn-ghost btn-sm" onclick="editSocial(${Number(s.id)})"><i class="fa-solid fa-pen"></i></button><button class="btn btn-danger-ghost btn-sm" onclick="deleteSocial(${Number(s.id)})"><i class="fa-solid fa-trash"></i></button>` : ''}</div>
         </div>`).join('');
 }
 
@@ -1930,7 +2022,7 @@ function renderFaqs() {
 
     list.innerHTML = sampleFaqs.map(f => `
         <div class="card-item flex-between"><div class="flex-1"><strong class="text-primary block font-bold mb-1"><i class="fa-solid fa-question-circle"></i> ${safeText(f.q)}</strong><p class="text-subtle text-sm">${safeText(f.a)}</p></div>
-            <div class="flex-align gap-3"><label class="switch-toggle" title="تفعيل/إخفاء السؤال"><input type="checkbox" ${f.visible ? 'checked' : ''} onchange="toggleFaqVisible(${Number(f.id)})"><span class="slider"></span></label><button class="btn btn-ghost btn-sm" onclick="editFaq(${Number(f.id)})"><i class="fa-solid fa-pen"></i></button><button class="btn btn-danger-ghost btn-sm" onclick="deleteFaq(${Number(f.id)})"><i class="fa-solid fa-trash"></i></button></div>
+            <div class="flex-align gap-3">${canAny(['landing.edit_faq', 'landing.edit']) ? `<label class="switch-toggle" title="تفعيل/إخفاء السؤال"><input type="checkbox" ${f.visible ? 'checked' : ''} onchange="toggleFaqVisible(${Number(f.id)})"><span class="slider"></span></label><button class="btn btn-ghost btn-sm" onclick="editFaq(${Number(f.id)})"><i class="fa-solid fa-pen"></i></button><button class="btn btn-danger-ghost btn-sm" onclick="deleteFaq(${Number(f.id)})"><i class="fa-solid fa-trash"></i></button>` : ''}</div>
         </div>`).join('');
 }
 

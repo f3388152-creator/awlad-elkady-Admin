@@ -22,7 +22,6 @@ module.exports = async (req, res) => {
 
     const secure = req.headers['x-forwarded-proto'] === 'https' || process.env.NODE_ENV === 'production';
     const cookie = [`admin_session=${data.access_token}`, 'HttpOnly', 'Path=/', 'SameSite=Strict'];
-    if (staff.session_enabled !== false) cookie.push(`Max-Age=${Math.min(Math.max(Number(staff.session_minutes) || 60, 15) * 60, Number(data.expires_in) || 3600)}`);
     if (secure) cookie.push('Secure');
     const refreshCookie = [`admin_refresh=${encodeURIComponent(data.refresh_token || '')}`, 'HttpOnly', 'Path=/', 'SameSite=Strict', 'Max-Age=2592000'];
     if (secure) refreshCookie.push('Secure');

@@ -64,19 +64,18 @@ module.exports = async (req, res) => {
       return res.status(401).json({ error: 'Session expired' });
     }
     const user = await userResponse.json();
-    let sessionMaxAge = Math.min(Number(data.expires_in) || 3600, 3600);
+    let sessionMaxAge = null;
     let staff = null;
 
     if (isPrimaryAdmin(user)) {
-      sessionMaxAge = Math.min(Number(data.expires_in) || 3600, 3600);
+      sessionMaxAge = null;
     } else if (user?.app_metadata?.role === 'staff' && user?.app_metadata?.staff_id) {
       staff = await findById(String(user.app_metadata.staff_id));
       if (!staff || staff.is_active === false || String(staff.auth_user_id) !== String(user.id)) {
         res.setHeader('Set-Cookie', clearCookies(secure));
         return res.status(403).json({ error: 'Staff account disabled' });
       }
-      if (staff.session_enabled === false) sessionMaxAge = null;
-      else sessionMaxAge = Math.min(Math.max(Number(staff.session_minutes) || 60, 15) * 60, 2592000);
+      sessionMaxAge = null;
     } else {
       res.setHeader('Set-Cookie', clearCookies(secure));
       return res.status(403).json({ error: 'Forbidden' });

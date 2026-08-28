@@ -41,8 +41,7 @@ module.exports = async (req, res) => {
       `admin_session=${data.access_token}`,
       'HttpOnly',
       'Path=/',
-      'SameSite=Strict',
-      `Max-Age=${Math.min(Number(data.expires_in) || 3600, 3600)}`
+      'SameSite=Strict'
     ];
     const refreshCookie = [
       `admin_refresh=${encodeURIComponent(data.refresh_token || '')}`,

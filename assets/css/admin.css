@@ -784,3 +784,19 @@ textarea.form-control { resize: vertical; }
         max-height: calc(100vh - 5.25rem);
     }
 }
+
+/* Compact responsive controls: reduce visual bulk without shrinking touch targets excessively. */
+.btn { min-height: 34px; padding: .44rem .82rem; font-size: .8rem; gap: .38rem; }
+.btn-sm { min-height: 30px; padding: .3rem .58rem; font-size: .72rem; }
+.control-bar, .order-card-footer, .product-card-actions, .customer-request-actions { gap: .45rem; }
+@media (max-width: 768px) {
+    .btn { min-height: 32px; padding: .4rem .68rem; font-size: .76rem; }
+    .btn-sm { min-height: 29px; padding: .28rem .52rem; font-size: .7rem; }
+    .control-bar { padding: .65rem; }
+    .control-bar .btn { flex: 0 1 auto; }
+    .product-card-actions, .order-card-footer > div, .customer-request-actions { gap: .35rem; }
+    .product-card-actions .btn, .order-card-footer .btn, .customer-request-actions .btn { white-space: nowrap; }
+}
+@media (min-width: 769px) {
+    .btn { max-width: 100%; }
+}
