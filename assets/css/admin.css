@@ -753,3 +753,34 @@ textarea.form-control { resize: vertical; }
 .push-notifications-card small[data-kind="success"] { color: #167044; }
 .push-notifications-card small[data-kind="error"] { color: #b42318; }
 @media (max-width: 560px) { .notifications-panel { position: fixed; top: 4.1rem; right: 1rem; left: 1rem; width: auto; } .push-notifications-card { align-items: flex-start; flex-direction: column; } .push-notifications-card .btn { width: 100%; } }
+
+/* Notification center must stay above dashboard content, cards, and buttons. */
+.main-workspace { overflow: visible; min-width: 0; }
+.top-bar { position: relative; z-index: 2100; overflow: visible; }
+.notifications-wrap {
+    position: relative;
+    z-index: 2000;
+    isolation: isolate;
+}
+.notifications-panel {
+    position: fixed;
+    z-index: 2147483000;
+    top: 5.15rem;
+    inset-inline-end: 1rem;
+    width: min(360px, calc(100vw - 2rem));
+    max-height: min(520px, calc(100vh - 6.25rem));
+    overflow: hidden;
+    pointer-events: auto;
+}
+.notifications-panel[hidden] { display: none !important; }
+.notifications-list { position: relative; z-index: 1; overflow-y: auto; overscroll-behavior: contain; }
+.notifications-panel button,
+.notifications-panel .notification-item { position: relative; z-index: 2; pointer-events: auto; }
+@media (max-width: 560px) {
+    .notifications-panel {
+        top: 4.15rem;
+        inset-inline: 1rem;
+        width: auto;
+        max-height: calc(100vh - 5.25rem);
+    }
+}

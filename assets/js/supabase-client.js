@@ -200,6 +200,19 @@ const Supabase = {
     return `${this.url}/storage/v1/object/public/${bucket}/${fileName}`;
   },
 
+  async removeStorageFile(url, bucket = 'public-assets') {
+    const imageUrl = String(url || '').trim();
+    if (!imageUrl) return false;
+    if (!window.ADMIN_API) throw new Error('حذف صور Storage متاح من لوحة الإدارة فقط');
+    const res = await window.adminFetch(`/api/admin-upload?bucket=${encodeURIComponent(bucket)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'delete', url: imageUrl })
+    });
+    if (!res.ok) throw new Error(`[Admin image delete:${bucket}] ${await res.text()}`);
+    return true;
+  },
+
   async replaceProductCategories(productId, categoryIds) {
     if (!window.ADMIN_API) throw new Error('ربط الأقسام متاح من لوحة الإدارة فقط');
     const res = await window.adminFetch(`/api/admin?table=product_categories&action=replace_product_categories&id=${encodeURIComponent(productId)}`, {

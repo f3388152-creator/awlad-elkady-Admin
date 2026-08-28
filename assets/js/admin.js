@@ -50,7 +50,7 @@ window.sb_fetch = async (table) => {
 window.sb_insert = async (table, data) => {
     let payload = data;
     if (table === 'products') payload = {name: data.name, sku: data.sku || '', price: Number(data.price) || 0, sale_price: data.salePrice ? Number(data.salePrice) : null, stock: Number(data.stock) || 0, stock_threshold: Number(data.stockThreshold) || 5, bosta_size: Number(data.bostaSize) || 0, is_bestseller: !!data.bestseller, description: data.desc || '', images: data.images || [], is_active: true};
-    if (table === 'categories') payload = {name: data.name, desc: data.desc || '', is_visible: data.is_visible !== false, sort_order: Number(data.sort_order) || 1};
+    if (table === 'categories') payload = {name: data.name, desc: data.desc || '', image_url: data.image_url || null, is_visible: data.is_visible !== false, sort_order: Number(data.sort_order) || 1};
     if (table === 'faqs') payload = {q: data.q, a: data.a, is_visible: data.visible !== false, sort_order: Number(data.sort_order) || 1};
     if (table === 'socials') payload = {name: data.name, icon: data.icon || 'fa-solid fa-link', link: data.link, is_visible: data.visible !== false, sort_order: Number(data.sort_order) || 1};
     return Supabase.insertReturn(table, payload);
@@ -60,7 +60,7 @@ window.sb_update = async (table, id, data) => {
     let payload = data;
     if (table === 'products') payload = {name: data.name, sku: data.sku || '', price: Number(data.price) || 0, sale_price: data.salePrice ? Number(data.salePrice) : null, stock: Number(data.stock) || 0, stock_threshold: Number(data.stockThreshold) || 5, bosta_size: Number(data.bostaSize) || 0, is_bestseller: !!data.bestseller, description: data.desc || '', images: data.images || []};
     if (table === 'products_visibility') { await Supabase.update('products', id, {is_active: data.is_active}); return true; }
-    if (table === 'categories') payload = {name: data.name, desc: data.desc || '', is_visible: data.is_visible !== false};
+    if (table === 'categories') payload = {name: data.name, desc: data.desc || '', image_url: data.image_url || null, is_visible: data.is_visible !== false};
     if (table === 'complaints') payload = {status: data.status};
     if (table === 'faqs' || table === 'socials') payload = {is_visible: data.visible};
     await Supabase.update(table, id, payload);
@@ -1131,7 +1131,7 @@ async function initProductsAndCategories() {
             const sizeSelect = document.getElementById('p-bosta-size');
             if (sizeSelect) sizeSelect.value = '140';
             populateCategoryDropdowns();
-            renderGalleryUploaderSlots([]);
+            renderGalleryUploaderSlots([], true);
             productModal.classList.remove('hidden');
         });
     }
@@ -1184,8 +1184,10 @@ async function initProductsAndCategories() {
                 if (typeof Supabase.replaceProductCategories === 'function' && (can('categories.assign') || categoryIds.length)) {
                     await Supabase.replaceProductCategories(savedId, categoryIds);
                 }
+                const imageCleanup = editId ? await cleanReplacedImages(originalEditingImages, currentEditingImages) : { failed: 0 };
 
                 productModal.classList.add('hidden');
+                if (imageCleanup.failed) alert('تم حفظ المنتج، لكن تعذر حذف صورة قديمة من التخزين.');
                 await refreshDashboardData();
                 alert('تم حفظ المنتج بنجاح!');
             } catch(error) {
@@ -1222,20 +1224,33 @@ async function initProductsAndCategories() {
             const localUrl = URL.createObjectURL(file);
             updateCategoryImagePreview(localUrl);
             catImagePreview?.addEventListener('load', () => URL.revokeObjectURL(localUrl), { once: true });
+            const previousUploadedUrl = uploadedCategoryImageUrl;
             const uploadedUrl = await sb_upload(file);
+            uploadedCategoryImageUrl = uploadedUrl;
             updateCategoryImagePreview(uploadedUrl);
+            if (previousUploadedUrl && previousUploadedUrl !== originalCategoryImageUrl) {
+                await Supabase.removeStorageFile(previousUploadedUrl).catch(error => console.warn('[category image cleanup]', error.message));
+            }
         } catch (error) {
             catImageFile.value = '';
             updateCategoryImagePreview(catImageUrl?.value || '');
             alert('تعذر رفع صورة القسم: ' + readableError(error, 'راجع نوع وحجم الصورة وصلاحيات الحساب.'));
         }
     });
-    catImageRemove?.addEventListener('click', () => { if (catImageFile) catImageFile.value = ''; updateCategoryImagePreview(''); });
+    catImageRemove?.addEventListener('click', () => {
+        if (catImageFile) catImageFile.value = '';
+        const uploadedUrl = uploadedCategoryImageUrl;
+        uploadedCategoryImageUrl = '';
+        updateCategoryImagePreview('');
+        if (uploadedUrl && uploadedUrl !== originalCategoryImageUrl) Supabase.removeStorageFile(uploadedUrl).catch(error => console.warn('[category image cleanup]', error.message));
+    });
 
     if (openAddCatBtn && categoryModal) {
         openAddCatBtn.addEventListener('click', () => {
             if (categoryForm) categoryForm.reset();
             document.getElementById('cat-edit-id').value = '';
+            originalCategoryImageUrl = '';
+            uploadedCategoryImageUrl = '';
             updateCategoryImagePreview('');
             document.getElementById('cat-modal-title').textContent = 'إضافة قسم جديد';
             categoryModal.classList.remove('hidden');
@@ -1257,7 +1272,10 @@ async function initProductsAndCategories() {
                 const payload = { name, desc, image_url: imageUrl };
                 if (editId) await sb_update('categories', editId, payload);
                 else await sb_insert('categories', payload);
+                const imageCleanup = await cleanReplacedCategoryImage(originalCategoryImageUrl, imageUrl);
+                uploadedCategoryImageUrl = '';
                 categoryModal.classList.add('hidden');
+                if (imageCleanup.failed) alert('تم حفظ القسم، لكن تعذر حذف الصورة القديمة من التخزين.');
                 await refreshDashboardData();
             } catch (error) {
                 alert('تعذر حفظ القسم: ' + readableError(error, 'راجع البيانات وحاول مرة أخرى.'));
@@ -1321,9 +1339,39 @@ function renderCategories(categories) {
 
 // 6 Image Slots Uploader State & Logic
 let currentEditingImages = [];
+let originalEditingImages = [];
+let uploadedEditingImageUrls = new Set();
+let originalCategoryImageUrl = '';
+let uploadedCategoryImageUrl = '';
 
-function renderGalleryUploaderSlots(existingImages) {
-    currentEditingImages = (existingImages || []).filter(img => img && img.url);
+function managedImageUrl(url) {
+    const value = String(url || '').trim();
+    return value && Supabase.url && value.startsWith(`${Supabase.url}/storage/v1/object/public/public-assets/`) ? value : '';
+}
+
+async function cleanReplacedImages(previousImages, nextImages) {
+    const nextUrls = new Set((Array.isArray(nextImages) ? nextImages : []).map(img => managedImageUrl(img?.url)).filter(Boolean));
+    const oldUrls = new Set((Array.isArray(previousImages) ? previousImages : []).map(img => managedImageUrl(img?.url)).filter(Boolean));
+    const urls = [...oldUrls].filter(url => !nextUrls.has(url));
+    if (!urls.length || typeof Supabase.removeStorageFile !== 'function') return { deleted: 0, failed: 0 };
+    const results = await Promise.allSettled(urls.map(url => Supabase.removeStorageFile(url)));
+    return { deleted: results.filter(result => result.status === 'fulfilled').length, failed: results.filter(result => result.status === 'rejected').length };
+}
+
+async function cleanReplacedCategoryImage(previousUrl, nextUrl) {
+    const oldUrl = managedImageUrl(previousUrl);
+    const newUrl = managedImageUrl(nextUrl);
+    if (!oldUrl || oldUrl === newUrl || typeof Supabase.removeStorageFile !== 'function') return { deleted: 0, failed: 0 };
+    try { await Supabase.removeStorageFile(oldUrl); return { deleted: 1, failed: 0 }; }
+    catch (_) { return { deleted: 0, failed: 1 }; }
+}
+
+function renderGalleryUploaderSlots(existingImages, captureOriginal = false) {
+    currentEditingImages = (existingImages || []).filter(img => img && img.url).map(img => ({ url: String(img.url), main: img.main === true }));
+    if (captureOriginal) {
+        originalEditingImages = currentEditingImages.map(img => ({ ...img }));
+        uploadedEditingImageUrls = new Set();
+    }
     const galleryContainer = document.getElementById('product-images-gallery');
     if (!galleryContainer) return;
 
@@ -1361,6 +1409,7 @@ window.handleImageSlotUpload = async function(event, index) {
         let isMain = false;
         if (currentEditingImages.length === 0) isMain = true;
         currentEditingImages.push({ url, main: isMain });
+        uploadedEditingImageUrls.add(url);
         renderGalleryUploaderSlots(currentEditingImages);
     } catch (e) {
         alert('تعذر رفع الصورة: ' + readableError(e, 'تحقق من نوع وحجم الصورة وصلاحيات الحساب.'));
@@ -1376,8 +1425,12 @@ window.setMainImageSlot = function(index) {
 };
 
 window.removeImageSlot = function(index) {
-    currentEditingImages.splice(index, 1);
+    const removed = currentEditingImages.splice(index, 1)[0];
     renderGalleryUploaderSlots(currentEditingImages);
+    if (removed?.url && uploadedEditingImageUrls.has(removed.url)) {
+        uploadedEditingImageUrls.delete(removed.url);
+        Supabase.removeStorageFile(removed.url).catch(error => console.warn('[image cleanup]', error.message));
+    }
 };
 
 window.editProduct = function(id) {
@@ -1398,7 +1451,7 @@ window.editProduct = function(id) {
     document.getElementById('p-tag-bestseller').checked = prod.bestseller;
     document.getElementById('p-desc').value = prod.desc;
 
-    renderGalleryUploaderSlots(prod.images || []);
+    renderGalleryUploaderSlots(prod.images || [], true);
 
     document.getElementById('product-modal-title').textContent = 'تعديل المنتج';
     document.getElementById('product-modal').classList.remove('hidden');
@@ -1441,6 +1494,8 @@ window.editCategory = function(id) {
     const imageUrl = document.getElementById('cat-image-url');
     const imagePreview = document.getElementById('cat-image-preview');
     const imageWrap = document.getElementById('cat-image-preview-wrap');
+    originalCategoryImageUrl = cat.image_url || '';
+    uploadedCategoryImageUrl = '';
     if (imageUrl) imageUrl.value = cat.image_url || '';
     if (imagePreview) imagePreview.src = cat.image_url || 'assets/images/logo.png';
     if (imageWrap) imageWrap.hidden = !cat.image_url;
@@ -1454,7 +1509,9 @@ window.editCategory = function(id) {
 window.deleteCategory = async function(id) {
     if (!confirm('هل أنت متأكد من حذف هذا القسم؟')) return;
     try {
+        const category = sampleCategories.find(item => String(item.id) === String(id));
         await sb_delete('categories', id);
+        if (category?.image_url) await cleanReplacedCategoryImage(category.image_url, '').catch(error => console.warn('[category delete image cleanup]', error.message));
         sampleCategories = await sb_fetch('categories') || [];
         renderCategories(sampleCategories);
         populateCategoryDropdowns();
