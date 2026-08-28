@@ -243,6 +243,7 @@ function applySessionPermissions() {
     const panel = document.getElementById('staff-management-panel');
     if (panel) panel.hidden = session.owner !== true;
     applySettingsVisibility();
+    window.applyShippingCalcVisibility?.();
     if (session.owner === true) initStaffManagement();
     initBostaPickupControl();
     initOverviewTools();
@@ -421,15 +422,36 @@ function initAdminSettings() {
     const pageSize = document.getElementById('admin-page-size');
     const showCalc = document.getElementById('admin-show-shipping-calc');
     const enableExcel = document.getElementById('admin-enable-excel');
+    const hideCalc = document.getElementById('hide-shipping-calc');
+    const restoreCalc = document.getElementById('restore-shipping-calc');
     if (pageSize) pageSize.value = saved.pageSize || 12;
     if (showCalc) showCalc.checked = saved.showShippingCalc !== false;
     if (enableExcel) enableExcel.checked = saved.enableExcel !== false;
+    const personalCalcKey = () => `awlad_shipping_calc_hidden:${window.ADMIN_SESSION?.user_id || 'guest'}`;
     const apply = () => {
         const calc = document.getElementById('open-shipping-calc');
         const excel = document.getElementById('export-bosta-btn');
-        if (calc && showCalc) calc.hidden = !showCalc.checked;
+        const controls = document.querySelector('.floating-calc-controls');
+        const personalHidden = localStorage.getItem(personalCalcKey()) === '1';
+        const globallyVisible = showCalc ? showCalc.checked : true;
+        const allowed = can('bosta.create');
+        const visible = allowed && globallyVisible && !personalHidden;
+        if (calc) calc.hidden = !visible;
+        if (hideCalc) hideCalc.hidden = !visible;
+        if (restoreCalc) restoreCalc.hidden = !allowed || globallyVisible === false || !personalHidden;
+        if (controls) controls.hidden = !allowed;
         if (excel && enableExcel) excel.hidden = !enableExcel.checked;
     };
+    window.applyShippingCalcVisibility = apply;
+    hideCalc?.addEventListener('click', () => {
+        localStorage.setItem(personalCalcKey(), '1');
+        document.getElementById('shipping-sidebar')?.classList.remove('open');
+        apply();
+    });
+    restoreCalc?.addEventListener('click', () => {
+        localStorage.removeItem(personalCalcKey());
+        apply();
+    });
     apply();
     document.getElementById('save-admin-settings-btn')?.addEventListener('click', () => {
         const prefs = { pageSize: Number(pageSize?.value) || 12, showShippingCalc: !!showCalc?.checked, enableExcel: !!enableExcel?.checked };

@@ -566,9 +566,13 @@
     </div>
 
     <!-- FLOATING ASWAN BOSTA CONTRACT SHIPPING CALCULATOR SIDEBAR -->
-    <button class="floating-calc-trigger" id="open-shipping-calc" title="حاسبة عقد أسوان المعتمة مع بوسطة">
-        <i class="fa-solid fa-calculator"></i>
-    </button>
+    <div class="floating-calc-controls" aria-label="تحكم حاسبة الشحن">
+        <button class="floating-calc-trigger" id="open-shipping-calc" title="حاسبة عقد أسوان المعتمدة مع بوسطة">
+            <i class="fa-solid fa-calculator"></i>
+        </button>
+        <button class="floating-calc-hide" id="hide-shipping-calc" type="button" title="إخفاء الحاسبة عندي" aria-label="إخفاء الحاسبة عندي">×</button>
+        <button class="floating-calc-restore btn btn-ghost btn-sm" id="restore-shipping-calc" type="button" hidden>إظهار الحاسبة</button>
+    </div>
 
     <div id="shipping-sidebar" class="drawer-panel glass-panel">
         <div class="drawer-header">

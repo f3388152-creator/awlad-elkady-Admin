@@ -800,3 +800,15 @@ textarea.form-control { resize: vertical; }
 @media (min-width: 769px) {
     .btn { max-width: 100%; }
 }
+
+/* Per-user shipping calculator visibility controls. */
+.floating-calc-controls { position: fixed; left: 25px; bottom: 25px; z-index: 100; display: flex; align-items: flex-start; gap: .2rem; }
+.floating-calc-controls .floating-calc-trigger { position: relative; left: auto; bottom: auto; }
+.floating-calc-hide { width: 20px; height: 20px; margin-top: -6px; margin-left: -12px; border: 0; border-radius: 50%; background: #fff; color: var(--clr-danger); box-shadow: 0 2px 8px rgba(0,0,0,.18); font-size: 16px; line-height: 18px; cursor: pointer; z-index: 2; }
+.floating-calc-hide:hover { background: var(--clr-danger); color: #fff; }
+.floating-calc-restore { position: fixed; left: 18px; bottom: 18px; z-index: 100; box-shadow: 0 4px 14px rgba(0,0,0,.14); }
+@media (max-width: 768px) {
+    .floating-calc-controls { left: 14px; bottom: 14px; }
+    .floating-calc-controls .floating-calc-trigger { width: 46px; height: 46px; font-size: 1.05rem; }
+    .floating-calc-restore { left: 12px; bottom: 12px; }
+}
