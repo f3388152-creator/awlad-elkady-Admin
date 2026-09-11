@@ -93,7 +93,7 @@ function initPasswordAuth() {
             if (!password) return;
             if (submitBtn) submitBtn.disabled = true;
             try {
-                const response = await fetch('/api/admin-auth', {
+                const response = await fetch('/api/admin?action=auth', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     credentials: 'include', body: JSON.stringify({ password, employeePhone })
                 });
@@ -133,7 +133,7 @@ function initPasswordAuth() {
     const logoutBtn = document.getElementById('logout-btn');
     if (logoutBtn) {
         logoutBtn.addEventListener('click', async () => {
-            await fetch('/api/admin-logout', { method: 'POST', credentials: 'include' });
+            await fetch('/api/admin?action=logout', { method: 'POST', credentials: 'include' });
             loginScreen.classList.remove('unlocked');
             dashboard.classList.add('hidden');
             document.getElementById('open-bulk-import')?.classList.add('hidden');
@@ -1282,7 +1282,7 @@ async function readBulkRows(file) {
 }
 
 async function importBulkProducts() {
-    const permissionResponse = await fetch('/api/admin/bulk-import', { credentials: 'include' });
+    const permissionResponse = await fetch('/api/admin?action=bulk-import', { credentials: 'include' });
     if (!permissionResponse.ok) return setBulkStatus('الرفع المجمع متاح للأدمن فقط.', true);
     const excelInput = document.getElementById('bulk-excel-file');
     const imagesInput = document.getElementById('bulk-image-files');
@@ -1374,7 +1374,7 @@ function initBulkProductImport() {
 let staffAccounts = [];
 
 async function fetchStaffAccounts() {
-    const response = await fetch('/api/admin-staff', { credentials: 'include' });
+    const response = await fetch('/api/admin?action=staff', { credentials: 'include' });
     if (!response.ok) throw new Error('تعذر تحميل الموظفين');
     return response.json();
 }
@@ -1431,14 +1431,14 @@ async function saveStaffAccount(event) {
     const password = document.getElementById('staff-password').value;
     if (password) payload.password = password;
     if (!id && !password) { document.getElementById('staff-status').textContent = 'اكتب كلمة سر لا تقل عن 8 حروف عند إضافة موظف.'; return; }
-    const response = await fetch(`/api/admin-staff${id ? `?id=${encodeURIComponent(id)}` : ''}`, { method: id ? 'PATCH' : 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    const response = await fetch(`/api/admin?action=staff${id ? `&id=${encodeURIComponent(id)}` : ''}`, { method: id ? 'PATCH' : 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     if (!response.ok) { const error = await response.json().catch(() => ({})); document.getElementById('staff-status').textContent = error.error || 'تعذر حفظ بيانات الموظف'; return; }
     staffAccounts = await fetchStaffAccounts(); renderStaffAccounts(); resetStaffForm(); document.getElementById('staff-status').textContent = 'تم حفظ بيانات الموظف بنجاح.';
 }
 
 async function deleteStaffAccount(id) {
     if (!confirm('هل أنت متأكد من حذف الموظف؟')) return;
-    const response = await fetch(`/api/admin-staff?id=${encodeURIComponent(id)}`, { method: 'DELETE', credentials: 'include' });
+    const response = await fetch(`/api/admin?action=staff&id=${encodeURIComponent(id)}`, { method: 'DELETE', credentials: 'include' });
     if (!response.ok) return;
     staffAccounts = await fetchStaffAccounts();
     renderStaffAccounts();
