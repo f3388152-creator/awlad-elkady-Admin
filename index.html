@@ -424,14 +424,57 @@
 
                             <!-- TAB 7: STAFF ACCOUNTS -->
                             <div id="tab-staff" class="tab-content-item">
-                                <div class="flex-between mb-3">
-                                    <div>
-                                        <h3 class="tab-heading mb-1"><i class="fa-solid fa-users-gear text-primary"></i> إدارة الموظفين وتعيين الصلاحيات</h3>
-                                        <p class="text-subtle text-sm">أضف الموظفين أو عطّل حساباتهم وحدد الصلاحيات القديمة كاملة.</p>
-                                    </div>
-                                    <button type="button" class="btn btn-primary text-sm" id="open-add-staff-btn"><i class="fa-solid fa-user-plus"></i> إضافة موظف</button>
+                                <div class="mb-3">
+                                    <h3 class="tab-heading mb-1"><i class="fa-solid fa-users-gear text-primary"></i> إدارة الموظفين والصلاحيات</h3>
+                                    <p class="text-subtle text-sm">أضف الموظف وحدد صلاحياته من نفس صفحة الإعدادات.</p>
                                 </div>
-                                <div id="staff-list-container" class="flex-column gap-2"></div>
+                                <form id="staff-form" class="staff-inline-form">
+                                    <input type="hidden" id="staff-edit-id">
+                                    <div class="form-grid cols-2 mb-3">
+                                        <div class="form-group"><label for="staff-phone">رقم الموبايل</label><input type="tel" id="staff-phone" class="form-control" inputmode="numeric" required></div>
+                                        <div class="form-group"><label for="staff-name">اسم الموظف</label><input type="text" id="staff-name" class="form-control" required></div>
+                                        <div class="form-group"><label for="staff-password">كلمة السر <small>(8 حروف على الأقل عند الإضافة)</small></label><input type="password" id="staff-password" class="form-control" minlength="8"></div>
+                                        <div class="form-group"><label for="staff-active">الحالة</label><select id="staff-active" class="form-control"><option value="true">نشط</option><option value="false">موقوف</option></select></div>
+                                    </div>
+                                    <div class="form-group mb-3">
+                                        <label>الصلاحيات</label>
+                                        <div id="staff-permissions" class="legacy-permissions-grid staff-permissions-grid">
+                                            <label><input type="checkbox" value="view_orders"> مشاهدة الطلبات</label>
+                                            <label><input type="checkbox" value="update_order_status"> تغيير حالة الطلب</label>
+                                            <label><input type="checkbox" value="edit_customer_data"> تعديل بيانات العميل</label>
+                                            <label><input type="checkbox" value="export_orders"> تصدير الطلبات</label>
+                                            <label><input type="checkbox" value="view_products"> مشاهدة المنتجات</label>
+                                            <label><input type="checkbox" value="create_products"> إضافة منتجات</label>
+                                            <label><input type="checkbox" value="edit_products_stock"> تعديل المنتجات والمخزون</label>
+                                            <label><input type="checkbox" value="archive_products"> أرشفة المنتجات</label>
+                                            <label><input type="checkbox" value="upload_product_images"> رفع صور المنتجات</label>
+                                            <label><input type="checkbox" value="view_categories"> مشاهدة الأقسام</label>
+                                            <label><input type="checkbox" value="create_categories"> إضافة الأقسام</label>
+                                            <label><input type="checkbox" value="edit_categories"> تعديل الأقسام</label>
+                                            <label><input type="checkbox" value="link_products_categories"> ربط المنتجات بالأقسام</label>
+                                            <label><input type="checkbox" value="view_complaints"> مشاهدة الشكاوى</label>
+                                            <label><input type="checkbox" value="update_complaint_status"> تغيير حالة الشكوى</label>
+                                            <label><input type="checkbox" value="archive_complaints"> أرشفة الشكاوى</label>
+                                            <label><input type="checkbox" value="view_landing_settings"> مشاهدة إعدادات الهبوط</label>
+                                            <label><input type="checkbox" value="edit_general_landing_settings"> تعديل إعدادات الهبوط العامة</label>
+                                            <label><input type="checkbox" value="edit_identity_seo"> تعديل الهوية والـSEO</label>
+                                            <label><input type="checkbox" value="edit_hero_catalog"> تعديل محتوى الهيرو والكتالوج</label>
+                                            <label><input type="checkbox" value="edit_contact_social"> تعديل التواصل والسوشيال</label>
+                                            <label><input type="checkbox" value="edit_faq"> تعديل الأسئلة الشائعة</label>
+                                            <label><input type="checkbox" value="edit_shipping"> تعديل الشحن</label>
+                                            <label><input type="checkbox" value="edit_bosta_settings"> تعديل إعدادات Bosta</label>
+                                            <label><input type="checkbox" value="edit_maintenance"> تعديل الصيانة</label>
+                                            <label><input type="checkbox" value="create_retry_bosta_shipment"> إنشاء/إعادة محاولة شحنة Bosta</label>
+                                            <label><input type="checkbox" value="confirm_packaging"> تأكيد التغليف</label>
+                                            <label><input type="checkbox" value="print_bosta_waybill"> طباعة بوليصة Bosta</label>
+                                            <label><input type="checkbox" value="request_bosta_pickup"> طلب استلام المندوب من Bosta</label>
+                                            <label><input type="checkbox" value="cancel_bosta_shipment"> إلغاء شحنة Bosta</label>
+                                            <label><input type="checkbox" value="bulk_import"> الرفع المجمع للمنتجات</label>
+                                        </div>
+                                    </div>
+                                    <div class="flex-align gap-2"><button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> حفظ الموظف</button><button type="button" class="btn btn-ghost" id="staff-reset-btn">موظف جديد</button></div>
+                                </form>
+                                <div id="staff-list-container" class="flex-column gap-2 mt-4"></div>
                                 <div id="staff-status" class="bulk-import-status" role="status" aria-live="polite"></div>
                             </div>
 
@@ -674,55 +717,6 @@
                 <button class="btn btn-emerald" id="resolve-complaint-btn"><i class="fa-solid fa-check"></i> تغيير
                     الحالة لـ "تم الحل"</button>
             </div>
-        </div>
-    </div>
-
-    <!-- MODAL: ADD / EDIT STAFF -->
-    <div id="staff-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="staff-modal-title">
-        <div class="modal-card glass-panel" style="max-width: 520px;">
-            <div class="modal-header">
-                <h3 id="staff-modal-title">إضافة موظف</h3>
-                <button type="button" class="icon-btn close-modal" aria-label="إغلاق"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-            <form id="staff-form">
-                <div class="modal-body custom-scroll">
-                    <input type="hidden" id="staff-edit-id">
-                    <div class="form-group mb-3">
-                        <label for="staff-phone">رقم الموظف</label>
-                        <input type="tel" id="staff-phone" class="form-control" inputmode="numeric" required>
-                    </div>
-                    <div class="form-group mb-3">
-                        <label for="staff-email">إيميل الدخول في Supabase</label>
-                        <input type="email" id="staff-email" class="form-control" required>
-                    </div>
-                    <div class="form-group mb-3">
-                        <label for="staff-permissions">الصلاحيات</label>
-                                                                <div id="staff-permissions" class="legacy-permissions-grid">
-                                                                    <label><input type="checkbox" value="orders"> مشاهدة الطلبات</label>
-                                                                    <label><input type="checkbox" value="update_orders"> تعديل حالة الطلبات</label>
-                                                                    <label><input type="checkbox" value="products"> إدارة المنتجات</label>
-                                                                    <label><input type="checkbox" value="categories"> إدارة الأقسام</label>
-                                                                    <label><input type="checkbox" value="complaints"> إدارة الشكاوى</label>
-                                                                    <label><input type="checkbox" value="faqs"> إدارة الأسئلة الشائعة</label>
-                                                                    <label><input type="checkbox" value="socials"> إدارة روابط التواصل</label>
-                                                                    <label><input type="checkbox" value="shipping"> إدارة الشحن</label>
-                                                                    <label><input type="checkbox" value="bulk_import"> الرفع المجمع للمنتجات</label>
-                                                                    <label><input type="checkbox" value="bosta_cancel"> إلغاء شحنة بوسطة</label>
-                                                                </div>
-                    </div>
-                    <input type="hidden" id="staff-bulk-permission" value="">
-                                        <label class="switch-toggle mb-3">
-                    <label class="switch-toggle">
-                        <input type="checkbox" id="staff-active" checked>
-                        <span class="slider"></span>
-                        <span class="text-subtle text-sm" style="margin-right:3rem;white-space:nowrap">الحساب نشط</span>
-                    </label>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-ghost close-modal">إلغاء</button>
-                    <button type="submit" class="btn btn-primary">حفظ الموظف</button>
-                </div>
-            </form>
         </div>
     </div>
 

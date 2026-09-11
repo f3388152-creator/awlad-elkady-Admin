@@ -1374,7 +1374,7 @@ function initBulkProductImport() {
 let staffAccounts = [];
 
 async function fetchStaffAccounts() {
-    const response = await fetch('/api/admin?table=staff_accounts&action=select&query=order=created_at.desc', { credentials: 'include' });
+    const response = await fetch('/api/admin-staff', { credentials: 'include' });
     if (!response.ok) throw new Error('تعذر تحميل الموظفين');
     return response.json();
 }
@@ -1382,54 +1382,42 @@ async function fetchStaffAccounts() {
 function renderStaffAccounts() {
     const list = document.getElementById('staff-list-container');
     if (!list) return;
-    if (!staffAccounts.length) {
-        list.textContent = 'لا يوجد موظفون مضافون حتى الآن.';
-        return;
-    }
+    if (!staffAccounts.length) { list.textContent = 'لا يوجد موظفون مضافون حتى الآن.'; return; }
     list.innerHTML = staffAccounts.map(staff => `
         <div class="card-item flex-between">
-            <div>
-                <strong class="text-primary block">${sanitizeFormValue(staff.phone, 30)}</strong>
-                <span class="text-subtle text-sm">${sanitizeFormValue(staff.login_email, 160)}</span>
-                <span class="text-subtle text-sm block">${staff.is_active ? 'نشط' : 'موقوف'} · ${Array.isArray(staff.permissions) ? staff.permissions.join('، ') : ''}</span>
-            </div>
-            <div class="flex-align gap-2">
-                <button type="button" class="btn btn-ghost btn-sm" data-edit-staff="${staff.id}"><i class="fa-solid fa-pen"></i> تعديل</button>
-                <button type="button" class="btn btn-danger-ghost btn-sm" data-delete-staff="${staff.id}"><i class="fa-solid fa-trash"></i></button>
-            </div>
+            <div><strong class="text-primary block">${sanitizeFormValue(staff.display_name || '', 100)}</strong><span class="text-subtle text-sm">${sanitizeFormValue(staff.phone, 30)} · ${staff.is_active ? 'نشط' : 'موقوف'}</span></div>
+            <div class="flex-align gap-2"><button type="button" class="btn btn-ghost btn-sm" data-edit-staff="${staff.id}"><i class="fa-solid fa-pen"></i> تعديل</button><button type="button" class="btn btn-danger-ghost btn-sm" data-delete-staff="${staff.id}"><i class="fa-solid fa-trash"></i></button></div>
         </div>`).join('');
 }
 
-function openStaffModal(staff = null) {
+function resetStaffForm() {
+    document.getElementById('staff-form')?.reset();
+    document.getElementById('staff-edit-id').value = '';
+    document.getElementById('staff-active').value = 'true';
+    document.querySelectorAll('#staff-permissions input[type="checkbox"]').forEach(input => { input.checked = false; });
+}
+
+function fillStaffForm(staff) {
     document.getElementById('staff-edit-id').value = staff?.id || '';
     document.getElementById('staff-phone').value = staff?.phone || '';
-    document.getElementById('staff-email').value = staff?.login_email || '';
-    document.getElementById('staff-active').checked = staff?.is_active !== false;
-    const permissions = Array.isArray(staff?.permissions) ? staff.permissions : [];
+    document.getElementById('staff-name').value = staff?.display_name || '';
+    document.getElementById('staff-password').value = '';
+    document.getElementById('staff-active').value = staff?.is_active === false ? 'false' : 'true';
+    const permissions = staff?.permissions && typeof staff.permissions === 'object' ? Object.keys(staff.permissions).filter(key => staff.permissions[key]) : (Array.isArray(staff?.permissions) ? staff.permissions : []);
     document.querySelectorAll('#staff-permissions input[type="checkbox"]').forEach(input => { input.checked = permissions.includes(input.value); });
-    document.getElementById('staff-bulk-permission').value = permissions.includes('bulk_import') ? '1' : '';
-    document.getElementById('staff-modal-title').textContent = staff ? 'تعديل موظف' : 'إضافة موظف';
-    document.getElementById('staff-modal').classList.remove('hidden');
+    document.getElementById('tab-staff')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 let staffAccountsInitialized = false;
 async function initStaffAccounts() {
     if (staffAccountsInitialized) return;
     staffAccountsInitialized = true;
-    const tab = document.getElementById('tab-staff');
-    if (!tab) return;
-    try {
-        staffAccounts = await fetchStaffAccounts();
-        renderStaffAccounts();
-    } catch (error) {
-        const status = document.getElementById('staff-status');
-        if (status) status.textContent = error.message;
-    }
-    document.getElementById('open-add-staff-btn')?.addEventListener('click', () => openStaffModal());
+    try { staffAccounts = await fetchStaffAccounts(); renderStaffAccounts(); } catch (error) { const status = document.getElementById('staff-status'); if (status) status.textContent = error.message; }
+    document.getElementById('staff-reset-btn')?.addEventListener('click', resetStaffForm);
     document.getElementById('staff-list-container')?.addEventListener('click', event => {
         const edit = event.target.closest('[data-edit-staff]');
         const remove = event.target.closest('[data-delete-staff]');
-        if (edit) openStaffModal(staffAccounts.find(item => String(item.id) === edit.dataset.editStaff));
+        if (edit) fillStaffForm(staffAccounts.find(item => String(item.id) === edit.dataset.editStaff));
         if (remove) deleteStaffAccount(remove.dataset.deleteStaff);
     });
     document.getElementById('staff-form')?.addEventListener('submit', saveStaffAccount);
@@ -1438,29 +1426,19 @@ async function initStaffAccounts() {
 async function saveStaffAccount(event) {
     event.preventDefault();
     const id = document.getElementById('staff-edit-id').value;
-    const payload = {
-        phone: sanitizeFormValue(document.getElementById('staff-phone').value, 30),
-        login_email: sanitizeFormValue(document.getElementById('staff-email').value, 160),
-        permissions: [...document.querySelectorAll('#staff-permissions input[type="checkbox"]:checked')].map(input => input.value),
-        is_active: document.getElementById('staff-active').checked
-    };
-    if (!/^\+?[0-9]{7,20}$/.test(payload.phone) || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(payload.login_email)) {
-        document.getElementById('staff-status').textContent = 'راجع رقم الموظف والإيميل.';
-        return;
-    }
-    const query = id ? `&id=${encodeURIComponent(id)}` : '';
-    const response = await fetch(`/api/admin?table=staff_accounts&action=${id ? 'update' : 'insert'}${query}`, {
-        method: id ? 'PATCH' : 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
-    });
-    if (!response.ok) throw new Error('تعذر حفظ بيانات الموظف');
-    staffAccounts = await fetchStaffAccounts();
-    renderStaffAccounts();
-    document.getElementById('staff-modal').classList.add('hidden');
+    const permissions = Object.fromEntries([...document.querySelectorAll('#staff-permissions input[type="checkbox"]:checked')].map(input => [input.value, true]));
+    const payload = { phone: sanitizeFormValue(document.getElementById('staff-phone').value, 30), display_name: sanitizeFormValue(document.getElementById('staff-name').value, 100), permissions, is_active: document.getElementById('staff-active').value === 'true' };
+    const password = document.getElementById('staff-password').value;
+    if (password) payload.password = password;
+    if (!id && !password) { document.getElementById('staff-status').textContent = 'اكتب كلمة سر لا تقل عن 8 حروف عند إضافة موظف.'; return; }
+    const response = await fetch(`/api/admin-staff${id ? `?id=${encodeURIComponent(id)}` : ''}`, { method: id ? 'PATCH' : 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    if (!response.ok) { const error = await response.json().catch(() => ({})); document.getElementById('staff-status').textContent = error.error || 'تعذر حفظ بيانات الموظف'; return; }
+    staffAccounts = await fetchStaffAccounts(); renderStaffAccounts(); resetStaffForm(); document.getElementById('staff-status').textContent = 'تم حفظ بيانات الموظف بنجاح.';
 }
 
 async function deleteStaffAccount(id) {
     if (!confirm('هل أنت متأكد من حذف الموظف؟')) return;
-    const response = await fetch(`/api/admin?table=staff_accounts&action=delete&id=${encodeURIComponent(id)}`, { method: 'DELETE', credentials: 'include' });
+    const response = await fetch(`/api/admin-staff?id=${encodeURIComponent(id)}`, { method: 'DELETE', credentials: 'include' });
     if (!response.ok) return;
     staffAccounts = await fetchStaffAccounts();
     renderStaffAccounts();
