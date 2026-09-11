@@ -19,7 +19,7 @@ window.sb_fetch = async (table) => {
         // Schema Adapter map
         if (table === 'products') return data.map(p => ({id: p.id, name: p.name, sku: p.sku, price: p.price, salePrice: p.sale_price, stock: p.stock, stockThreshold: p.stock_threshold, bostaSize: p.bosta_size, category: p.category || '', is_active: p.is_active !== false, bestseller: p.is_bestseller, desc: p.description, images: p.images || [], sizes: Array.isArray(p.sizes) ? p.sizes : []}));
         if (table === 'orders') return data.map(o => ({id: String(o.id), status: o.status, date: new Date(o.created_at).toLocaleDateString('ar-EG'), name: o.customer_name, phone: o.customer_phone, secondPhone: o.customer_second_phone, gov: o.governorate, area: o.area, address: o.address, subtotal: o.subtotal || 0, shipping: o.shipping_fee || 0, notes: o.notes, items: o.items || [], tracking_number: o.tracking_number || '—'}));
-        if (table === 'complaints') return data.map(c => ({id: c.id, client: c.customer_name, phone: c.customer_phone, date: new Date(c.created_at).toLocaleDateString('ar-EG'), status: c.status, text: c.message}));
+        if (table === 'complaints') return data.map(c => ({id: c.id, client: c.customer_name, phone: c.customer_phone, date: new Date(c.created_at).toLocaleDateString('ar-EG'), status: c.status, text: c.message, notes: c.notes || '', is_archived: c.is_archived === true}));
         if (table === 'site_settings' && data.length) return [{id: data[0].id, q: '', a: '', ...data[0]}];
         if (table === 'faqs' || table === 'socials') return data.map(d => ({...d, visible: d.is_visible !== false}));
         return data;
@@ -40,7 +40,7 @@ window.sb_update = async (table, id, data) => {
     if (table === 'products') data = {name: data.name, sku: data.sku || '', price: parseFloat(data.price)||0, sale_price: data.salePrice ? parseFloat(data.salePrice) : null, stock: parseInt(data.stock)||0, stock_threshold: parseInt(data.stockThreshold)||5, bosta_size: parseFloat(data.bostaSize)||0, category: data.category, is_bestseller: !!data.bestseller, description: data.desc || '', sizes: Array.isArray(data.sizes) ? data.sizes : [], images: data.images || []};
     if (table === 'products_visibility') { await Supabase.update('products', id, {is_active: data.is_active}); return; }
     if (table === 'categories') data = {name: data.name, description: data.desc || ''};
-    if (table === 'complaints') data = {status: data.status};
+    if (table === 'complaints') data = { ...(data.status !== undefined ? { status: data.status } : {}), ...(data.message !== undefined ? { message: data.message } : {}), ...(data.notes !== undefined ? { notes: data.notes } : {}), ...(data.is_archived !== undefined ? { is_archived: data.is_archived } : {}), ...(data.archived_at !== undefined ? { archived_at: data.archived_at } : {}), ...(data.archive_reason !== undefined ? { archive_reason: data.archive_reason } : {}) };
     if (table === 'faqs') data = {is_visible: data.visible};
     if (table === 'socials') data = {is_visible: data.visible};
     if (table === 'site_settings') { /* pass through */ }
@@ -106,6 +106,9 @@ function initPasswordAuth() {
                 }
                 loginScreen.classList.add('unlocked');
                 dashboard.classList.remove('hidden');
+                window.ADMIN_ACCESS = { admin: details.admin === true, owner: details.admin === true, permissions: details.permissions || (details.admin ? { '*': true } : {}) };
+                applyPermissionVisibility();
+                if (!details.admin) fetch('/api/admin?action=presence', { method: 'POST', credentials: 'include' });
                 if (details.admin === true) {
                     document.getElementById('open-bulk-import')?.classList.remove('hidden');
                     document.querySelector('.settings-tab-btn[data-tab="tab-staff"]')?.classList.remove('hidden');
@@ -129,6 +132,7 @@ function initPasswordAuth() {
             }
         });
     }
+    setInterval(() => { if (window.ADMIN_ACCESS && !window.ADMIN_ACCESS.owner) fetch('/api/admin?action=presence', { method: 'POST', credentials: 'include' }); }, 60000);
 
     const logoutBtn = document.getElementById('logout-btn');
     if (logoutBtn) {
@@ -163,6 +167,7 @@ function initDateBadge() {
 // ==========================================
 function initNavigation() {
     const navItems = document.querySelectorAll('.sidebar .nav-item');
+    applyPermissionVisibility();
     const viewPanes = document.querySelectorAll('.view-pane');
     const pageTitle = document.getElementById('page-title');
     const sidebar = document.querySelector('.sidebar');
@@ -813,6 +818,7 @@ let activeComplaintId = null;
 
 async function initComplaintsSystem() {
     sampleComplaints = await sb_fetch('complaints') || [];
+    sampleComplaints = sampleComplaints.filter(item => !item.is_archived);
     renderComplaints(sampleComplaints);
 
     // Filters
@@ -850,6 +856,17 @@ async function initComplaintsSystem() {
     }
 
     // Direct WhatsApp Chat
+    document.getElementById('save-complaint-btn')?.addEventListener('click', async () => {
+        if (activeComplaintId === null) return;
+        await sb_update('complaints', activeComplaintId, { message: document.getElementById('modal-c-text').value.trim(), notes: document.getElementById('modal-c-notes').value.trim() });
+        sampleComplaints = await sb_fetch('complaints') || []; renderComplaints(sampleComplaints); document.getElementById('complaint-modal').classList.add('hidden');
+    });
+    document.getElementById('delete-complaint-btn')?.addEventListener('click', async () => {
+        if (activeComplaintId === null || !confirm('هل أنت متأكد من حذف الشكوى؟')) return;
+        await sb_update('complaints', activeComplaintId, { is_archived: true, archived_at: new Date().toISOString(), archive_reason: 'حذف من لوحة الإدارة' });
+        sampleComplaints = sampleComplaints.filter(item => item.id !== activeComplaintId); renderComplaints(sampleComplaints); document.getElementById('complaint-modal').classList.add('hidden');
+    });
+
     const waBtn = document.getElementById('whatsapp-direct-btn');
     if (waBtn) {
         waBtn.addEventListener('click', () => {
@@ -902,7 +919,8 @@ window.openComplaintModal = function(id) {
 
     document.getElementById('modal-c-client').textContent = `بلاغ العميل: ${c.client}`;
     document.getElementById('modal-c-date').textContent = c.date;
-    document.getElementById('modal-c-text').textContent = c.text;
+    document.getElementById('modal-c-text').value = c.text || '';
+    document.getElementById('modal-c-notes').value = c.notes || '';
     document.getElementById('modal-c-phone').value = c.phone;
 
     const badgeEl = document.getElementById('modal-c-status-badge');
@@ -912,6 +930,17 @@ window.openComplaintModal = function(id) {
 
     document.getElementById('complaint-modal').classList.remove('hidden');
 };
+
+function applyPermissionVisibility() {
+    if (!window.ADMIN_ACCESS) return;
+    const isOwner = window.ADMIN_ACCESS.owner === true || window.ADMIN_ACCESS.admin === true;
+    const permissions = window.ADMIN_ACCESS?.permissions || {};
+    const allowed = key => isOwner || permissions['*'] === true || permissions[key] === true || permissions[key.replace('view_', '') + '.view'] === true;
+    document.querySelectorAll('[data-permission]').forEach(element => { if (!allowed(element.dataset.permission)) element.classList.add('hidden'); });
+    const firstVisible = [...document.querySelectorAll('.sidebar .nav-item')].find(item => !item.classList.contains('hidden'));
+    if (firstVisible && !document.querySelector('.sidebar .nav-item.active:not(.hidden)')) firstVisible.click();
+}
+
 
 // ==========================================
 // 8. SITE SETTINGS & DYNAMIC COLOR PICKER
@@ -1385,7 +1414,7 @@ function renderStaffAccounts() {
     if (!staffAccounts.length) { list.textContent = 'لا يوجد موظفون مضافون حتى الآن.'; return; }
     list.innerHTML = staffAccounts.map(staff => `
         <div class="card-item flex-between">
-            <div><strong class="text-primary block">${sanitizeFormValue(staff.display_name || '', 100)}</strong><span class="text-subtle text-sm">${sanitizeFormValue(staff.phone, 30)} · ${staff.is_active ? 'نشط' : 'موقوف'}</span></div>
+            <div><strong class="text-primary block">${sanitizeFormValue(staff.display_name || '', 100)}</strong><span class="text-subtle text-sm">${sanitizeFormValue(staff.phone, 30)} · ${staff.is_active ? 'نشط' : 'موقوف'} · <span class="presence-dot ${staff.is_online ? 'online' : ''}"></span>${staff.is_online ? 'أونلاين' : `آخر ظهور: ${staff.last_seen_at ? new Date(staff.last_seen_at).toLocaleString('ar-EG') : 'غير مسجل'}`}</span></div>
             <div class="flex-align gap-2"><button type="button" class="btn btn-ghost btn-sm" data-edit-staff="${staff.id}"><i class="fa-solid fa-pen"></i> تعديل</button><button type="button" class="btn btn-danger-ghost btn-sm" data-delete-staff="${staff.id}"><i class="fa-solid fa-trash"></i></button></div>
         </div>`).join('');
 }
@@ -1413,6 +1442,11 @@ async function initStaffAccounts() {
     if (staffAccountsInitialized) return;
     staffAccountsInitialized = true;
     try { staffAccounts = await fetchStaffAccounts(); renderStaffAccounts(); } catch (error) { const status = document.getElementById('staff-status'); if (status) status.textContent = error.message; }
+    document.querySelectorAll('[data-permission-preset]').forEach(button => button.addEventListener('click', () => {
+        const type = button.dataset.permissionPreset;
+        const keys = type === 'all' ? null : type === 'shipping' ? ['edit_shipping','edit_bosta_settings','create_retry_bosta_shipment','confirm_packaging','print_bosta_waybill','request_bosta_pickup','cancel_bosta_shipment'] : ['view_products','create_products','edit_products_stock','archive_products','upload_product_images'];
+        document.querySelectorAll('#staff-permissions input[type="checkbox"]').forEach(input => { input.checked = keys ? keys.includes(input.value) : true; });
+    }));
     document.getElementById('staff-reset-btn')?.addEventListener('click', resetStaffForm);
     document.getElementById('staff-list-container')?.addEventListener('click', event => {
         const edit = event.target.closest('[data-edit-staff]');

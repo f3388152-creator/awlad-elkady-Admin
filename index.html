@@ -69,19 +69,19 @@
                 <img src="/assets/images/logo.png" alt="أولاد القاضي" class="brand-logo">
             </div>
 
-            <button class="nav-item active" data-target="orders">
+            <button class="nav-item active" data-target="orders" data-permission="view_orders">
                 <i class="fa-solid fa-boxes-stacked"></i> <span>إدارة الطلبات</span>
             </button>
-            <button class="nav-item" data-target="products">
+            <button class="nav-item" data-target="products" data-permission="view_products">
                 <i class="fa-solid fa-box-open"></i> <span>المنتجات</span>
             </button>
-            <button class="nav-item" data-target="categories">
+            <button class="nav-item" data-target="categories" data-permission="view_categories">
                 <i class="fa-solid fa-folder-tree"></i> <span>الأقسام</span>
             </button>
-            <button class="nav-item" data-target="complaints">
+            <button class="nav-item" data-target="complaints" data-permission="view_complaints">
                 <i class="fa-solid fa-headset"></i> <span>الشكاوى</span>
             </button>
-            <button class="nav-item" data-target="settings">
+            <button class="nav-item" data-target="settings" data-permission="view_landing_settings">
                 <i class="fa-solid fa-gears"></i> <span>الإعدادات</span>
             </button>
             </nav>
@@ -218,8 +218,8 @@
                 <section id="view-settings" class="view-pane">
                     <div class="settings-container glass-panel legacy-settings">
                         <div class="settings-main-tabs" role="tablist" aria-label="إعدادات الموقع">
-                            <button type="button" class="settings-main-tab active" data-settings-view="landing">إعدادات صفحة الهبوط</button>
-                            <button type="button" class="settings-main-tab" data-settings-view="admin">إعدادات لوحة الإدارة</button>
+                            <button type="button" class="settings-main-tab active" data-settings-view="landing" data-permission="view_landing_settings">إعدادات صفحة الهبوط</button>
+                            <button type="button" class="settings-main-tab" data-settings-view="admin" data-permission="view_admin_settings">إعدادات لوحة الإدارة</button>
                         </div>
                         <!-- Settings Sidebar Sub-navigation -->
                         <div class="settings-sidebar">
@@ -241,7 +241,7 @@
                             <button class="settings-tab-btn" data-tab="tab-maintenance">
                                 <i class="fa-solid fa-palette"></i> 6. الصيانة والألوان
                             </button>
-                            <button class="settings-tab-btn" data-tab="tab-staff">
+                            <button class="settings-tab-btn" data-tab="tab-staff" data-permission="manage_staff">
                                 <i class="fa-solid fa-users-gear"></i> 7. إدارة الموظفين والصلاحيات
                             </button>
                         </div>
@@ -438,6 +438,11 @@
                                     </div>
                                     <div class="form-group mb-3">
                                         <label>الصلاحيات</label>
+                                        <div class="permission-presets flex-align gap-2 mb-2">
+                                            <button type="button" class="btn btn-ghost btn-sm" data-permission-preset="all">تحديد الكل</button>
+                                            <button type="button" class="btn btn-ghost btn-sm" data-permission-preset="shipping">صلاحيات الشحن</button>
+                                            <button type="button" class="btn btn-ghost btn-sm" data-permission-preset="products">صلاحيات المنتجات</button>
+                                        </div>
                                         <div id="staff-permissions" class="legacy-permissions-grid staff-permissions-grid">
                                             <label><input type="checkbox" value="view_orders"> مشاهدة الطلبات</label>
                                             <label><input type="checkbox" value="update_order_status"> تغيير حالة الطلب</label>
@@ -704,7 +709,11 @@
                 </div>
                 <div class="form-group mb-3">
                     <label>نص الشكوى / البلاغ الوارد:</label>
-                    <div id="modal-c-text" class="complaint-text-box"></div>
+                    <textarea id="modal-c-text" class="form-control complaint-text-box" rows="4"></textarea>
+                </div>
+                <div class="form-group mb-3">
+                    <label for="modal-c-notes">ملاحظات وإجراءات الإدارة:</label>
+                    <textarea id="modal-c-notes" class="form-control" rows="3" placeholder="اكتب الإجراء أو الملاحظة..."></textarea>
                 </div>
                 <div class="form-group">
                     <label>رقم هاتف العميل للتواصل:</label>
@@ -714,8 +723,11 @@
             <div class="modal-footer flex-between">
                 <button class="btn btn-whatsapp" id="whatsapp-direct-btn"><i class="fa-brands fa-whatsapp"></i> تواصل
                     عبر واتساب</button>
-                <button class="btn btn-emerald" id="resolve-complaint-btn"><i class="fa-solid fa-check"></i> تغيير
-                    الحالة لـ "تم الحل"</button>
+                <div class="flex-align gap-2">
+                    <button class="btn btn-ghost" id="save-complaint-btn"><i class="fa-solid fa-floppy-disk"></i> حفظ التعديل</button>
+                    <button class="btn btn-danger-ghost" id="delete-complaint-btn"><i class="fa-solid fa-trash"></i> حذف</button>
+                    <button class="btn btn-emerald" id="resolve-complaint-btn"><i class="fa-solid fa-check"></i> تم الحل</button>
+                </div>
             </div>
         </div>
     </div>
