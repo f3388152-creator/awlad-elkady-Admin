@@ -955,6 +955,8 @@ async function initSiteSettings() {
     const settingsArr = await sb_fetch('site_settings');
     if (settingsArr && settingsArr.length > 0) {
         const settings = settingsArr[0];
+        const setValue = (id, value) => { const field = document.getElementById(id); if (field && value != null) field.value = value; };
+        setValue('setting-site-name', settings.site_name); setValue('setting-brand-name', settings.brand_name); setValue('setting-seo-desc', settings.seo_description); setValue('setting-marquee-text', settings.marquee_text); setValue('setting-hero-title', settings.hero_title);
 
         // Populating Identity
         if (settings.logo_header) {
@@ -1068,13 +1070,11 @@ async function initSiteSettings() {
     if (faqForm) {
         faqForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const q = document.getElementById('faq-q').value;
-            const a = document.getElementById('faq-a').value;
-            const newFaq = { q, a, visible: true };
-            await sb_insert('faqs', newFaq);
-            sampleFaqs = await sb_fetch('faqs') || [];
-            renderFaqs();
-            faqModal.classList.add('hidden');
+            const q = document.getElementById('faq-q').value.trim();
+            const a = document.getElementById('faq-a').value.trim();
+            const editId = faqForm.dataset.editId;
+            if (editId) await sb_update('faqs', editId, { q, a }); else await sb_insert('faqs', { q, a, visible: true });
+            sampleFaqs = await sb_fetch('faqs') || []; renderFaqs(); delete faqForm.dataset.editId; faqModal.classList.add('hidden');
         });
     }
 
@@ -1173,22 +1173,11 @@ function renderSocialLinks() {
 function renderFaqs() {
     const list = document.getElementById('faq-list-container');
     if (!list) return;
-
     list.innerHTML = sampleFaqs.map(f => `
         <div class="card-item flex-between">
-            <div class="flex-1">
-                <strong class="text-primary block font-bold mb-1"><i class="fa-solid fa-question-circle"></i> ${f.q}</strong>
-                <p class="text-subtle text-sm">${f.a}</p>
-            </div>
-            <div class="flex-align gap-3">
-                <label class="switch-toggle" title="تفعيل/إخفاء السؤال">
-                    <input type="checkbox" ${f.visible ? 'checked' : ''} onchange="toggleFaqVisible(${f.id})">
-                    <span class="slider"></span>
-                </label>
-                <button class="btn btn-danger-ghost btn-sm" onclick="deleteFaq(${f.id})"><i class="fa-solid fa-trash"></i></button>
-            </div>
-        </div>
-    `).join('');
+            <div class="flex-1"><strong class="text-primary block font-bold mb-1"><i class="fa-solid fa-question-circle"></i> ${sanitizeFormValue(f.q, 300)}</strong><p class="text-subtle text-sm">${sanitizeFormValue(f.a, 2000)}</p></div>
+            <div class="flex-align gap-2"><button class="btn btn-ghost btn-sm" onclick="editFaq(${f.id})"><i class="fa-solid fa-pen"></i> تعديل</button><label class="switch-toggle" title="تفعيل/إخفاء السؤال"><input type="checkbox" ${f.visible ? 'checked' : ''} onchange="toggleFaqVisible(${f.id})"><span class="slider"></span></label><button class="btn btn-danger-ghost btn-sm" onclick="deleteFaq(${f.id})"><i class="fa-solid fa-trash"></i></button></div>
+        </div>`).join('');
 }
 
 window.toggleSocialVisible = async function(id) {
@@ -1208,6 +1197,12 @@ window.deleteSocial = async function(id) {
             renderSocialLinks();
         } catch(e) { alert('خطأ في الحذف'); }
     }
+};
+
+window.editFaq = function(id) {
+    const item = sampleFaqs.find(f => f.id === id); if (!item) return;
+    document.getElementById('faq-q').value = item.q || ''; document.getElementById('faq-a').value = item.a || '';
+    document.getElementById('faq-form').dataset.editId = String(id); document.getElementById('faq-modal').classList.remove('hidden');
 };
 
 window.toggleFaqVisible = async function(id) {

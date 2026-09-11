@@ -17,7 +17,9 @@ const TABLES = {
   product_categories: 'product_categories',
   shipping_rates: 'shipping_rates',
   complaints: 'complaints',
-  site_settings: 'site_settings'
+  site_settings: 'site_settings',
+  faqs: 'faqs',
+  socials: 'socials'
 };
 
 // محافظات مصر ومناطق الشحن (تُستخدم فقط للقائمة المنسدلة الأولية)
