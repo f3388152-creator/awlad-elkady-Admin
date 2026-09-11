@@ -1,82 +1,77 @@
 /* admin.js - Awlad El-Kady Admin Dashboard Full Functional UI Engine */
+window.ADMIN_API = true;
 
-const ADMIN_ALLOWED_SOCIAL_SCHEMES = /^(https?:|tel:|mailto:)/i;
-let protectedSystemsStarted = false;
-
-function safeText(value) {
-    return String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[char]));
+function sanitizeFormValue(value, maxLength = 5000) {
+    return String(value ?? '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').trim().slice(0, maxLength);
 }
 
-function readableError(error, fallback = 'حدث خطأ غير متوقع.') {
-    const raw = String(error?.message || '').replace(/\s+/g, ' ').trim();
-    if (!raw) return fallback;
-    const withoutPrefix = raw.replace(/^\[[^\]]+\]\s*/, '');
-    try {
-        const parsed = JSON.parse(withoutPrefix);
-        if (parsed?.error) return String(parsed.error).slice(0, 240);
-        if (parsed?.message) return String(parsed.message).slice(0, 240);
-    } catch (_) { /* keep plain message */ }
-    return withoutPrefix.slice(0, 240);
-}
-
-function normalizeProduct(p) {
-    return {
-        id: p.id, name: p.name || '', sku: p.sku || '', price: Number(p.price) || 0,
-        salePrice: p.sale_price == null ? null : Number(p.sale_price), stock: Number(p.stock) || 0,
-        stockThreshold: Number(p.stock_threshold) || 5, bostaSize: Number(p.bosta_size) || 0,
-        category: p.category || '', category_ids: p.category_ids || [], category_names: p.category_names || [],
-        is_active: p.is_active !== false, bestseller: p.is_bestseller === true,
-        desc: p.description || '', images: Array.isArray(p.images) ? p.images : [],
-        material: p.material || '', size: p.size || '', is_archived: p.is_archived === true,
-        archived_at: p.archived_at || null, archived_by: p.archived_by || '', archive_reason: p.archive_reason || ''
-    };
+function sanitizeFormData(data) {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return data;
+    return Object.fromEntries(Object.entries(data).map(([key, value]) => [
+        key,
+        typeof value === 'string' ? sanitizeFormValue(value) : value
+    ]));
 }
 
 window.sb_fetch = async (table) => {
     try {
-        const query = table === 'site_settings' ? 'id=eq.1' : 'order=created_at.desc';
-        const data = await Supabase.select(table, query);
-        if (table === 'products') return data.map(normalizeProduct);
-        if (table === 'orders') return data.map(o => ({id: String(o.id), status: o.status, createdAt: o.created_at || null, date: new Date(o.created_at).toLocaleDateString('ar-EG'), name: o.customer_name, phone: o.customer_phone, secondPhone: o.customer_second_phone, gov: o.governorate, area: o.area, address: o.address, subtotal: Number(o.subtotal) || 0, shipping: Number(o.shipping_fee) || 0, notes: o.notes, items: Array.isArray(o.items) ? o.items : [], tracking_number: o.bosta_tracking_number || o.tracking_number || '—', bosta_status: o.bosta_status || null, bosta_delivery_id: o.bosta_delivery_id || null, bosta_pickup_id: o.bosta_pickup_id || null, bosta_sync_status: o.bosta_sync_status || null}));
-        if (table === 'order_customer_requests') return data.map(r => ({ id: String(r.id), orderId: String(r.order_id), type: r.request_type, reason: r.reason || '', changes: r.requested_changes && typeof r.requested_changes === 'object' ? r.requested_changes : {}, status: r.status || 'pending', createdAt: new Date(r.created_at).toLocaleString('ar-EG'), adminNote: r.admin_note || '' }));
-        if (table === 'complaints') return data.map(c => ({id: c.id, client: c.customer_name || '', phone: c.customer_phone || '', date: new Date(c.created_at).toLocaleDateString('ar-EG'), status: c.status || 'new', text: c.message || '', is_archived: c.is_archived === true, archived_at: c.archived_at || null, archived_by: c.archived_by || '', archive_reason: c.archive_reason || ''}));
-        if (table === 'site_settings') return data.length ? [{...data[0], id: data[0].id}] : [];
-        if (table === 'categories') return data.map(c => ({...c, desc: c.desc || c.description || ''}));
+        const data = await Supabase.select(table, 'order=created_at.desc');
+        // Schema Adapter map
+        if (table === 'products') return data.map(p => ({id: p.id, name: p.name, sku: p.sku, price: p.price, salePrice: p.sale_price, stock: p.stock, stockThreshold: p.stock_threshold, bostaSize: p.bosta_size, category: p.category || '', is_active: p.is_active !== false, bestseller: p.is_bestseller, desc: p.description, images: p.images || [], sizes: Array.isArray(p.sizes) ? p.sizes : []}));
+        if (table === 'orders') return data.map(o => ({id: String(o.id), status: o.status, date: new Date(o.created_at).toLocaleDateString('ar-EG'), name: o.customer_name, phone: o.customer_phone, secondPhone: o.customer_second_phone, gov: o.governorate, area: o.area, address: o.address, subtotal: o.subtotal || 0, shipping: o.shipping_fee || 0, notes: o.notes, items: o.items || [], tracking_number: o.tracking_number || '—'}));
+        if (table === 'complaints') return data.map(c => ({id: c.id, client: c.customer_name, phone: c.customer_phone, date: new Date(c.created_at).toLocaleDateString('ar-EG'), status: c.status, text: c.message}));
+        if (table === 'site_settings' && data.length) return [{id: data[0].id, q: '', a: '', ...data[0]}];
         if (table === 'faqs' || table === 'socials') return data.map(d => ({...d, visible: d.is_visible !== false}));
         return data;
-    } catch(e) { console.error('[Admin fetch]', e); throw e; }
+    } catch(e) { console.error(e); return []; }
 };
 
 window.sb_insert = async (table, data) => {
-    let payload = data;
-    if (table === 'products') payload = {name: data.name, sku: data.sku || '', price: Number(data.price) || 0, sale_price: data.salePrice ? Number(data.salePrice) : null, stock: Number(data.stock) || 0, stock_threshold: Number(data.stockThreshold) || 5, bosta_size: Number(data.bostaSize) || 0, is_bestseller: !!data.bestseller, description: data.desc || '', images: data.images || [], is_active: true};
-    if (table === 'categories') payload = {name: data.name, desc: data.desc || '', image_url: data.image_url || null, is_visible: data.is_visible !== false, sort_order: Number(data.sort_order) || 1};
-    if (table === 'faqs') payload = {q: data.q, a: data.a, is_visible: data.visible !== false, sort_order: Number(data.sort_order) || 1};
-    if (table === 'socials') payload = {name: data.name, icon: data.icon || 'fa-solid fa-link', link: data.link, is_visible: data.visible !== false, sort_order: Number(data.sort_order) || 1};
-    return Supabase.insertReturn(table, payload);
+    data = sanitizeFormData(data);
+    if (table === 'products') data = {name: data.name, sku: data.sku || '', price: parseFloat(data.price)||0, sale_price: data.salePrice ? parseFloat(data.salePrice) : null, stock: parseInt(data.stock)||0, stock_threshold: parseInt(data.stockThreshold)||5, bosta_size: parseFloat(data.bostaSize)||0, category: data.category, is_bestseller: !!data.bestseller, description: data.desc || '', sizes: Array.isArray(data.sizes) ? data.sizes : [], images: data.images || [], is_active: true};
+    if (table === 'categories') data = {name: data.name, description: data.desc};
+    if (table === 'faqs') data = {q: data.q, a: data.a, is_visible: data.visible !== false, sort_order: 1};
+    if (table === 'socials') data = {name: data.name, icon: data.icon, link: data.link, is_visible: data.visible !== false, sort_order: 1};
+    await Supabase.insert(table, data);
 };
 
 window.sb_update = async (table, id, data) => {
-    let payload = data;
-    if (table === 'products') payload = {name: data.name, sku: data.sku || '', price: Number(data.price) || 0, sale_price: data.salePrice ? Number(data.salePrice) : null, stock: Number(data.stock) || 0, stock_threshold: Number(data.stockThreshold) || 5, bosta_size: Number(data.bostaSize) || 0, is_bestseller: !!data.bestseller, description: data.desc || '', images: data.images || []};
-    if (table === 'products_visibility') { await Supabase.update('products', id, {is_active: data.is_active}); return true; }
-    if (table === 'categories') payload = {name: data.name, desc: data.desc || '', image_url: data.image_url || null, is_visible: data.is_visible !== false};
-    if (table === 'complaints') payload = {status: data.status};
-    if (table === 'faqs' || table === 'socials') payload = {is_visible: data.visible};
-    await Supabase.update(table, id, payload);
-    return true;
+    data = sanitizeFormData(data);
+    if (table === 'products') data = {name: data.name, sku: data.sku || '', price: parseFloat(data.price)||0, sale_price: data.salePrice ? parseFloat(data.salePrice) : null, stock: parseInt(data.stock)||0, stock_threshold: parseInt(data.stockThreshold)||5, bosta_size: parseFloat(data.bostaSize)||0, category: data.category, is_bestseller: !!data.bestseller, description: data.desc || '', sizes: Array.isArray(data.sizes) ? data.sizes : [], images: data.images || []};
+    if (table === 'products_visibility') { await Supabase.update('products', id, {is_active: data.is_active}); return; }
+    if (table === 'categories') data = {name: data.name, description: data.desc || ''};
+    if (table === 'complaints') data = {status: data.status};
+    if (table === 'faqs') data = {is_visible: data.visible};
+    if (table === 'socials') data = {is_visible: data.visible};
+    if (table === 'site_settings') { /* pass through */ }
+    await Supabase.update(table, id, data);
 };
 
-window.sb_delete = async (table, id) => Supabase.delete(table, id);
-window.sb_upload = async (file) => Supabase.upload(file);document.addEventListener('DOMContentLoaded', () => {
+window.sb_delete = async (table, id) => await Supabase.delete(table, id);
+window.sb_upload = async (file) => await Supabase.upload(file);document.addEventListener('DOMContentLoaded', () => {
     initPasswordAuth();
     initDateBadge();
     initNavigation();
     initAswanShippingCalc();
-    initSettingsScopes();
-    initAdminSettings();
-    initOverview();
-    initBostaPickupControl();
+    initOrdersSystem();
+    initProductsAndCategories();
+    initComplaintsSystem();
+    initSiteSettings();
+
+    // Polling Mechanism (Sync every 15s)
+    setInterval(async () => {
+        // Prevent re-rendering if user is editing inside a modal
+        if (document.querySelectorAll('.modal-overlay:not(.hidden)').length === 0) {
+            sampleOrders = await sb_fetch('orders') || [];
+            if(document.getElementById('view-orders')?.classList.contains('active')) renderOrders(sampleOrders);
+
+            sampleComplaints = await sb_fetch('complaints') || [];
+            if(document.getElementById('view-complaints')?.classList.contains('active')) renderComplaints(sampleComplaints);
+
+            sampleProducts = await sb_fetch('products') || [];
+            if(document.getElementById('view-products')?.classList.contains('active')) renderProducts(sampleProducts);
+        }
+    }, 15000);
 });
 
 // ==========================================
@@ -86,7 +81,6 @@ function initPasswordAuth() {
     const loginForm = document.getElementById('login-form');
     const loginScreen = document.getElementById('login-screen');
     const pwdInput = document.getElementById('password-only');
-    const staffPhoneInput = document.getElementById('staff-phone-login');
     const loginError = document.getElementById('login-error');
     const dashboard = document.getElementById('dashboard');
 
@@ -94,14 +88,14 @@ function initPasswordAuth() {
         loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const password = pwdInput ? pwdInput.value : '';
+            const employeePhone = document.getElementById('employee-phone')?.value?.trim() || '';
             const submitBtn = loginForm.querySelector('button[type="submit"]');
             if (!password) return;
             if (submitBtn) submitBtn.disabled = true;
             try {
-                const staffPhone = staffPhoneInput?.value?.trim() || '';
-                const response = await fetch(staffPhone ? '/api/admin-staff-auth' : '/api/admin-auth', {
+                const response = await fetch('/api/admin-auth', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include', body: JSON.stringify(staffPhone ? { phone: staffPhone, password } : { password })
+                    credentials: 'include', body: JSON.stringify({ password, employeePhone })
                 });
                 let details = {};
                 try { details = await response.json(); } catch (_) { /* non-JSON response */ }
@@ -112,8 +106,14 @@ function initPasswordAuth() {
                 }
                 loginScreen.classList.add('unlocked');
                 dashboard.classList.remove('hidden');
-                await hydrateAdminSession();
-                await startProtectedSystems();
+                if (details.admin === true) {
+                    document.getElementById('open-bulk-import')?.classList.remove('hidden');
+                    document.querySelector('.settings-tab-btn[data-tab="tab-staff"]')?.classList.remove('hidden');
+                    initStaffAccounts();
+                } else {
+                    document.getElementById('open-bulk-import')?.classList.add('hidden');
+                    document.querySelector('.settings-tab-btn[data-tab="tab-staff"]')?.classList.add('hidden');
+                }
             } catch (error) {
                 loginError.textContent = error.status === 503
                     ? 'تسجيل الدخول غير مهيأ على الخادم. تحقق من متغيرات Vercel السرية.'
@@ -121,7 +121,8 @@ function initPasswordAuth() {
                         ? 'الحساب غير مصرح له كمدير.'
                         : 'كلمة المرور غير صحيحة.';
                 if (pwdInput) { pwdInput.value = ''; pwdInput.focus(); }
-                if (staffPhoneInput) staffPhoneInput.value = '';
+                const employeePhoneInput = document.getElementById('employee-phone');
+                if (employeePhoneInput) employeePhoneInput.value = '';
                 console.error('[admin-auth]', error.status || 'network', error.message);
             } finally {
                 if (submitBtn) submitBtn.disabled = false;
@@ -135,264 +136,15 @@ function initPasswordAuth() {
             await fetch('/api/admin-logout', { method: 'POST', credentials: 'include' });
             loginScreen.classList.remove('unlocked');
             dashboard.classList.add('hidden');
+            document.getElementById('open-bulk-import')?.classList.add('hidden');
+            document.getElementById('bulk-import-panel')?.classList.add('hidden');
+            document.querySelector('.settings-tab-btn[data-tab="tab-staff"]')?.classList.add('hidden');
             if (pwdInput) pwdInput.value = '';
-            if (staffPhoneInput) staffPhoneInput.value = '';
+            const employeePhoneInput = document.getElementById('employee-phone');
+            if (employeePhoneInput) employeePhoneInput.value = '';
             if (loginError) loginError.textContent = '';
         });
-        window.adminFetch('/api/admin-check').then(async response => {
-            if (response.ok) {
-                window.ADMIN_SESSION = await response.json();
-                applySessionPermissions();
-                loginScreen.classList.add('unlocked');
-                dashboard.classList.remove('hidden');
-                startProtectedSystems();
-            }
-        }).catch(() => {});
     }
-}
-
-let staffManagementStarted = false;
-window.ADMIN_SESSION = window.ADMIN_SESSION || null;
-window.staffCache = [];
-
-function can(permission) {
-    const session = window.ADMIN_SESSION || {};
-    return session.owner === true || session.permissions?.['*'] === true || session.permissions?.[permission] === true;
-}
-
-function canAny(permissions) {
-    return (permissions || []).some(permission => can(permission));
-}
-
-function setPermissionVisibility(selector, permission, visibleWhenOwner = true) {
-    const allowed = Array.isArray(permission) ? canAny(permission) : can(permission);
-    document.querySelectorAll(selector).forEach(element => {
-        element.hidden = visibleWhenOwner ? !allowed : !(window.ADMIN_SESSION?.owner === true || allowed);
-    });
-}
-
-function applySettingsVisibility() {
-    const session = window.ADMIN_SESSION || {};
-    const landingVisible = can('landing.view');
-    const adminVisible = session.owner === true;
-    const settingsNav = document.querySelector('.nav-item[data-target="settings"]');
-    if (settingsNav) settingsNav.hidden = !landingVisible && !adminVisible;
-
-    const landingScope = document.querySelector('[data-settings-scope="landing"]');
-    const adminScope = document.querySelector('[data-settings-scope="admin"]');
-    if (landingScope) landingScope.hidden = !landingVisible;
-    if (adminScope) adminScope.hidden = !adminVisible;
-
-    const tabPermissions = {
-        'tab-identity': ['landing.edit_identity', 'landing.edit'],
-        'tab-content': ['landing.edit_content', 'landing.edit'],
-        'tab-contact': ['landing.edit_contact', 'landing.edit'],
-        'tab-faq': ['landing.edit_faq', 'landing.edit'],
-        'tab-shipping': ['landing.edit_shipping', 'landing.edit'],
-        'tab-bosta': ['landing.edit_bosta', 'landing.edit'],
-        'tab-maintenance': ['landing.edit_maintenance', 'landing.edit']
-    };
-    Object.entries(tabPermissions).forEach(([tabId, permissions]) => {
-        const tab = document.querySelector(`[data-tab="${tabId}"]`);
-        const pane = document.getElementById(tabId);
-        const visible = landingVisible && canAny(permissions);
-        if (tab) tab.hidden = !visible;
-        if (pane) pane.hidden = !visible;
-        if (visible && pane) {
-            pane.querySelectorAll('input, textarea, select, button').forEach(control => {
-                if (!control.closest('.settings-sidebar')) control.disabled = !canAny(permissions);
-            });
-        }
-    });
-
-    const adminPane = document.getElementById('admin-settings-pane');
-    if (adminPane) adminPane.hidden = !adminVisible;
-    if (!landingVisible && adminVisible) {
-        landingScope?.classList.remove('active');
-        adminScope?.classList.add('active');
-        document.getElementById('landing-settings-pane')?.classList.add('hidden');
-        adminPane?.classList.remove('hidden');
-    }
-    const actionPermissions = {
-        '#open-add-product-modal': 'products.create',
-        '#open-add-category-modal': 'categories.create',
-        '#export-bosta-btn': 'orders.export',
-        '#open-add-faq-modal': ['landing.edit_faq', 'landing.edit'],
-        '#add-social-link-btn': ['landing.edit_contact', 'landing.edit'],
-        '#save-identity-btn': ['landing.edit_identity', 'landing.edit'],
-        '#save-content-btn': ['landing.edit_content', 'landing.edit'],
-        '#save-contact-btn': ['landing.edit_contact', 'landing.edit'],
-        '#save-shipping-setting-btn': ['landing.edit_shipping', 'landing.edit'],
-        '#save-bosta-setting-btn': ['landing.edit_bosta', 'landing.edit'],
-        '#save-maintenance-btn': ['landing.edit_maintenance', 'landing.edit'],
-        '#open-shipping-calc': 'bosta.create',
-        '#resolve-complaint-btn': 'complaints.update_status'
-    };
-    Object.entries(actionPermissions).forEach(([selector, permission]) => setPermissionVisibility(selector, permission));
-    setPermissionVisibility('#filter-products-archived', '*', false);
-    setPermissionVisibility('#filter-complaints-archived', '*', false);
-}
-
-function applySessionPermissions() {
-    const session = window.ADMIN_SESSION || {};
-    const navPermissions = { orders: 'orders.view', products: 'products.view', categories: 'categories.view', complaints: 'complaints.view' };
-    document.querySelectorAll('.nav-item[data-target]').forEach(item => {
-        const permission = navPermissions[item.dataset.target];
-        if (permission) item.hidden = !can(permission);
-    });
-    const panel = document.getElementById('staff-management-panel');
-    if (panel) panel.hidden = session.owner !== true;
-    applySettingsVisibility();
-    window.applyShippingCalcVisibility?.();
-    if (session.owner === true) initStaffManagement();
-    initBostaPickupControl();
-    initOverviewTools();
-}
-
-async function hydrateAdminSession() {
-    try {
-        const response = await window.adminFetch('/api/admin-check');
-        if (!response.ok) throw new Error('SESSION_FAILED');
-        window.ADMIN_SESSION = await response.json();
-        applySessionPermissions();
-    } catch (error) {
-        console.error('[admin-session]', error);
-    }
-}
-
-function staffPermissionsFromForm() {
-    const permissions = {};
-    document.querySelectorAll('[data-staff-permission]').forEach(input => { if (input.checked) permissions[input.dataset.staffPermission] = true; });
-    return permissions;
-}
-
-function fillStaffPermissions(permissions = {}) {
-    document.querySelectorAll('[data-staff-permission]').forEach(input => { input.checked = permissions[input.dataset.staffPermission] === true; });
-}
-
-function resetStaffForm() {
-    const form = document.getElementById('staff-form');
-    form?.reset();
-    const id = document.getElementById('staff-id'); if (id) id.value = '';
-    const active = document.getElementById('staff-active'); if (active) active.checked = true;
-    fillStaffPermissions({});
-}
-
-window.editStaff = function(id) {
-    const staff = window.staffCache.find(row => String(row.id) === String(id));
-    if (!staff) return;
-    document.getElementById('staff-id').value = staff.id;
-    document.getElementById('staff-phone').value = staff.phone || '';
-    document.getElementById('staff-phone').disabled = true;
-    document.getElementById('staff-name').value = staff.display_name || '';
-    document.getElementById('staff-password').value = '';
-    document.getElementById('staff-active').checked = staff.is_active !== false;
-    fillStaffPermissions(staff.permissions || {});
-    document.getElementById('staff-management-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-};
-
-window.toggleStaff = async function(id, active) {
-    const response = await window.adminFetch(`/api/admin-staff?id=${encodeURIComponent(id)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_active: active }) });
-    if (!response.ok) return alert('تعذر تغيير حالة الموظف.');
-    await loadStaffList();
-};
-
-window.deleteStaffAccount = async function(id) {
-    if (window.ADMIN_SESSION?.owner !== true) return alert('حذف الموظف متاح للمالك فقط.');
-    const staff = window.staffCache.find(row => String(row.id) === String(id));
-    const name = staff?.display_name || 'هذا الموظف';
-    if (!window.confirm(`تأكيد حذف الموظف «${name}» نهائياً؟ سيتم إلغاء حساب دخوله وحذف سجله من القائمة.`)) return;
-    const response = await window.adminFetch(`/api/admin-staff?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
-    if (!response.ok) {
-        let data = {}; try { data = await response.json(); } catch (_) {}
-        return alert(staffOperationMessage(data));
-    }
-    if (String(document.getElementById('staff-id')?.value || '') === String(id)) {
-        resetStaffForm();
-        document.getElementById('staff-phone').disabled = false;
-    }
-    await loadStaffList();
-};
-
-function renderStaffList(rows) {
-    const target = document.getElementById('staff-list');
-    if (!target) return;
-    if (!rows.length) { target.innerHTML = '<p class="text-subtle">لا يوجد موظفون مضافون حالياً.</p>'; return; }
-        target.innerHTML = `<div class="table-responsive"><table class="data-table"><thead><tr><th>الاسم</th><th>الموبايل</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody>${rows.map(row => `<tr><td>${safeText(row.display_name)}</td><td dir="ltr">${safeText(row.phone)}</td><td>${row.is_active === false ? '<span class="status-badge status-danger">موقوف</span>' : '<span class="status-badge status-success">نشط</span>'}</td><td><button class="btn btn-secondary btn-sm" type="button" onclick="editStaff('${safeText(row.id)}')">تعديل</button><button class="btn btn-secondary btn-sm" type="button" onclick="toggleStaff('${safeText(row.id)}', ${row.is_active === false})">${row.is_active === false ? 'تفعيل' : 'إيقاف'}</button><button class="btn btn-danger btn-sm" type="button" onclick="deleteStaffAccount('${safeText(row.id)}')">حذف نهائي</button></td></tr>`).join('')}</tbody></table></div>`;
-}
-
-function staffOperationMessage(data = {}) {
-    const value = String(data.error || '').trim();
-    const messages = {
-        INVALID_PHONE: 'رقم موبايل الموظف غير صحيح. استخدم رقم مصري من 11 رقم.',
-        INVALID_PASSWORD: 'كلمة السر لازم تكون من 8 إلى 128 حرفاً.',
-        INVALID_NAME: 'اكتب اسم الموظف.',
-        STAFF_EXISTS: 'يوجد موظف مسجل بهذا الرقم بالفعل.',
-        INVALID_SESSION_MINUTES: 'مدة الجلسة لازم تكون بين 15 دقيقة و30 يوم.',
-        STAFF_RECORD_CREATE_FAILED: 'تم إنشاء حساب الدخول ولم يكتمل سجل الموظف؛ أعد المحاولة بعد مراجعة Migration الموظفين.',
-        'جدول الموظفين غير محدث في Supabase؛ نفّذ Migration الموظفين ثم أعد المحاولة.': 'جدول الموظفين غير محدث في Supabase؛ نفّذ Migration الموظفين ثم أعد المحاولة.'
-    };
-    return messages[value] || value || 'تعذر تنفيذ عملية الموظف حالياً. راجع إعدادات Supabase أو أعد المحاولة.';
-}
-
-async function loadStaffList() {
-    const target = document.getElementById('staff-list');
-    if (!target || window.ADMIN_SESSION?.owner !== true) return;
-    try {
-        const response = await window.adminFetch('/api/admin-staff');
-        if (!response.ok) throw new Error('STAFF_LIST_FAILED');
-        window.staffCache = await response.json();
-        renderStaffList(window.staffCache);
-    } catch (error) {
-        target.innerHTML = '<p class="text-danger">تعذر تحميل الموظفين.</p>';
-        console.error('[staff-list]', error);
-    }
-}
-
-function initStaffManagement() {
-    if (staffManagementStarted) return;
-    staffManagementStarted = true;
-    const form = document.getElementById('staff-form');
-    const staffPassword = document.getElementById('staff-password');
-    const staffPasswordToggle = document.getElementById('toggle-staff-password');
-    if (staffPassword && staffPasswordToggle && staffPasswordToggle.dataset.bound !== '1') {
-        staffPasswordToggle.addEventListener('click', () => {
-            const visible = staffPassword.type === 'text';
-            staffPassword.type = visible ? 'password' : 'text';
-            const icon = staffPasswordToggle.querySelector('i');
-            icon?.classList.toggle('fa-eye', visible);
-            icon?.classList.toggle('fa-eye-slash', !visible);
-            staffPasswordToggle.title = visible ? 'إظهار كلمة المرور' : 'إخفاء كلمة المرور';
-            staffPasswordToggle.setAttribute('aria-label', visible ? 'إظهار كلمة مرور الموظف' : 'إخفاء كلمة مرور الموظف');
-        });
-        staffPasswordToggle.dataset.bound = '1';
-    }
-    document.getElementById('staff-reset-btn')?.addEventListener('click', () => { resetStaffForm(); document.getElementById('staff-phone').disabled = false; });
-    form?.addEventListener('submit', async event => {
-        event.preventDefault();
-        const id = document.getElementById('staff-id')?.value;
-        const payload = { phone: document.getElementById('staff-phone')?.value, display_name: document.getElementById('staff-name')?.value, password: document.getElementById('staff-password')?.value, is_active: document.getElementById('staff-active')?.checked, permissions: staffPermissionsFromForm() };
-        if (id && !payload.password) delete payload.password;
-        const response = await window.adminFetch(id ? `/api/admin-staff?id=${encodeURIComponent(id)}` : '/api/admin-staff', { method: id ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-        if (!response.ok) { let data = {}; try { data = await response.json(); } catch (_) {} return alert(staffOperationMessage(data)); }
-        resetStaffForm();
-        document.getElementById('staff-phone').disabled = false;
-        await loadStaffList();
-    });
-    loadStaffList();
-}
-
-async function startProtectedSystems() {
-    if (protectedSystemsStarted) return;
-    protectedSystemsStarted = true;
-    const tasks = [];
-    if (can('orders.view')) tasks.push(initOrdersSystem());
-    if (can('products.view') || can('categories.view')) tasks.push(initProductsAndCategories());
-    if (can('complaints.view')) tasks.push(initComplaintsSystem());
-    if (can('landing.view')) tasks.push(initSiteSettings());
-    await Promise.allSettled(tasks);
-    await refreshDashboardData();
-    setInterval(refreshDashboardData, 30000);
 }
 
 // ==========================================
@@ -404,296 +156,6 @@ function initDateBadge() {
         const options = { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' };
         dateEl.textContent = new Date().toLocaleDateString('ar-EG', options);
     }
-}
-
-function initSettingsScopes() {
-    const buttons = document.querySelectorAll('[data-settings-scope]');
-    const panes = { landing: document.getElementById('landing-settings-pane'), admin: document.getElementById('admin-settings-pane') };
-    buttons.forEach(button => button.addEventListener('click', () => {
-        buttons.forEach(item => item.classList.toggle('active', item === button));
-        Object.entries(panes).forEach(([key, pane]) => pane?.classList.toggle('hidden', key !== button.dataset.settingsScope));
-    }));
-}
-
-function initAdminSettings() {
-    const key = 'awlad_admin_preferences';
-    let saved = {};
-    try { saved = JSON.parse(localStorage.getItem(key) || '{}'); } catch (_) {}
-    const pageSize = document.getElementById('admin-page-size');
-    const showCalc = document.getElementById('admin-show-shipping-calc');
-    const enableExcel = document.getElementById('admin-enable-excel');
-    const hideCalc = document.getElementById('hide-shipping-calc');
-    const restoreCalc = document.getElementById('restore-shipping-calc');
-    if (pageSize) pageSize.value = saved.pageSize || 12;
-    if (showCalc) showCalc.checked = saved.showShippingCalc !== false;
-    if (enableExcel) enableExcel.checked = saved.enableExcel !== false;
-    const personalCalcKey = () => `awlad_shipping_calc_hidden:${window.ADMIN_SESSION?.user_id || 'guest'}`;
-    const apply = () => {
-        const calc = document.getElementById('open-shipping-calc');
-        const excel = document.getElementById('export-bosta-btn');
-        const controls = document.querySelector('.floating-calc-controls');
-        const personalHidden = localStorage.getItem(personalCalcKey()) === '1';
-        const globallyVisible = showCalc ? showCalc.checked : true;
-        const allowed = can('bosta.create');
-        const visible = allowed && globallyVisible && !personalHidden;
-        if (calc) calc.hidden = !visible;
-        if (hideCalc) hideCalc.hidden = !visible;
-        if (restoreCalc) restoreCalc.hidden = !allowed || globallyVisible === false || !personalHidden;
-        if (controls) controls.hidden = !allowed;
-        if (excel && enableExcel) excel.hidden = !enableExcel.checked;
-    };
-    window.applyShippingCalcVisibility = apply;
-    hideCalc?.addEventListener('click', () => {
-        localStorage.setItem(personalCalcKey(), '1');
-        document.getElementById('shipping-sidebar')?.classList.remove('open');
-        apply();
-    });
-    restoreCalc?.addEventListener('click', () => {
-        localStorage.removeItem(personalCalcKey());
-        apply();
-    });
-    apply();
-    document.getElementById('save-admin-settings-btn')?.addEventListener('click', () => {
-        const prefs = { pageSize: Number(pageSize?.value) || 12, showShippingCalc: !!showCalc?.checked, enableExcel: !!enableExcel?.checked };
-        localStorage.setItem(key, JSON.stringify(prefs));
-        apply();
-        alert('تم حفظ إعدادات اللوحة بنجاح.');
-    });
-}
-
-async function refreshDashboardData() {
-    if (document.querySelector('.modal-overlay:not(.hidden)')) return;
-    try {
-        const [orders, complaints, products, categories, links] = await Promise.all([
-            can('orders.view') ? sb_fetch('orders') : Promise.resolve([]),
-            can('complaints.view') ? sb_fetch('complaints') : Promise.resolve([]),
-            can('products.view') ? sb_fetch('products') : Promise.resolve([]),
-            can('categories.view') ? sb_fetch('categories') : Promise.resolve([]),
-            can('products.view') || can('categories.view') ? Supabase.select('product_categories').catch(() => []) : Promise.resolve([])
-        ]);
-        sampleOrders = orders || [];
-        sampleComplaints = complaints || [];
-        sampleCategories = categories || [];
-        sampleProducts = attachProductCategories(products || [], links || []);
-        if (document.getElementById('view-orders')?.classList.contains('active')) renderOrders(sampleOrders);
-        if (document.getElementById('view-complaints')?.classList.contains('active')) renderComplaints(sampleComplaints);
-        if (document.getElementById('view-products')?.classList.contains('active')) renderProducts(sampleProducts);
-        if (document.getElementById('view-categories')?.classList.contains('active')) renderCategories(sampleCategories);
-        populateCategoryDropdowns();
-        updateOverviewStats();
-    } catch (error) { console.error('[dashboard sync]', error); }
-}
-
-function attachProductCategories(products, links) {
-    const map = new Map();
-    (links || []).forEach(link => {
-        const id = Number(link.product_id);
-        if (!map.has(id)) map.set(id, []);
-        map.get(id).push(Number(link.category_id));
-    });
-    return (products || []).map(product => ({ ...product, category_ids: map.get(Number(product.id)) || [] }));
-}
-
-let overviewToolsStarted = false;
-let overviewHelpRows = [];
-
-function initOverview() {
-    updateOverviewStats();
-    initOverviewTools();
-}
-
-function overviewCan(permission) {
-    return window.ADMIN_SESSION?.owner === true || can(permission);
-}
-
-function applyOverviewVisibility() {
-    const cards = document.querySelectorAll('[data-overview-permission]');
-    let visible = 0;
-    cards.forEach(card => {
-        const allowed = overviewCan(card.dataset.overviewPermission);
-        card.hidden = !allowed;
-        if (allowed) visible += 1;
-    });
-    const empty = document.getElementById('overview-no-access');
-    if (empty) empty.hidden = visible > 0;
-}
-
-function updateOverviewStats() {
-    const newOrders = sampleOrders.filter(order => ['جديد', 'new'].includes(order.status)).length;
-    const revenue = sampleOrders.reduce((sum, order) => sum + Number(order.subtotal || 0) + Number(order.shipping || 0), 0);
-    const openComplaints = sampleComplaints.filter(item => !['resolved', 'تم الحل', 'closed'].includes(item.status)).length;
-    const lowStock = sampleProducts.filter(item => Number(item.stock) <= Number(item.stockThreshold || 5)).length;
-    const values = {
-        'stat-new-orders': newOrders,
-        'stat-revenue': `${revenue.toLocaleString('ar-EG')} جنيه`,
-        'stat-products': sampleProducts.length,
-        'stat-categories': sampleCategories.length,
-        'stat-open-complaints': openComplaints,
-        'stat-low-stock': lowStock
-    };
-    Object.entries(values).forEach(([id, value]) => { const el = document.getElementById(id); if (el) el.textContent = value; });
-    applyOverviewVisibility();
-    renderOverviewCharts();
-}
-
-function emptyChart(target, message = 'لا توجد بيانات كافية حالياً.') {
-    if (target) target.innerHTML = `<div class="chart-empty"><i class="fa-solid fa-chart-simple"></i><span>${safeText(message)}</span></div>`;
-}
-
-function renderOrdersTrendChart() {
-    const target = document.getElementById('orders-trend-chart');
-    if (!target) return;
-    const today = new Date(); today.setHours(23, 59, 59, 999);
-    const days = Array.from({ length: 7 }, (_, index) => {
-        const date = new Date(today); date.setDate(today.getDate() - (6 - index)); date.setHours(0, 0, 0, 0);
-        return { date, label: date.toLocaleDateString('ar-EG', { weekday: 'short' }), count: 0 };
-    });
-    sampleOrders.forEach(order => {
-        const value = new Date(order.createdAt || '');
-        if (Number.isNaN(value.getTime())) return;
-        value.setHours(0, 0, 0, 0);
-        const item = days.find(day => day.date.getTime() === value.getTime());
-        if (item) item.count += 1;
-    });
-    const max = Math.max(...days.map(item => item.count), 1);
-    const points = days.map((item, index) => `${index * 100},${156 - (item.count / max) * 122}`).join(' ');
-    const area = `0,156 ${points} 600,156`;
-    target.innerHTML = `<svg class="line-chart" viewBox="0 0 600 205" role="img" aria-label="حركة الطلبات خلال آخر سبعة أيام" preserveAspectRatio="none"><defs><linearGradient id="overview-line-fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#1a6b3c" stop-opacity=".28"/><stop offset="1" stop-color="#1a6b3c" stop-opacity="0"/></linearGradient></defs><line x1="0" y1="156" x2="600" y2="156" class="chart-axis"/><line x1="0" y1="95" x2="600" y2="95" class="chart-grid-line"/><line x1="0" y1="34" x2="600" y2="34" class="chart-grid-line"/><polygon points="${area}" fill="url(#overview-line-fill)"/><polyline points="${points}" class="chart-line"/>${days.map((item, index) => `<circle cx="${index * 100}" cy="${156 - (item.count / max) * 122}" r="4" class="chart-point"><title>${safeText(item.label)}: ${item.count}</title></circle>`).join('')}</svg><div class="chart-labels">${days.map(item => `<span>${safeText(item.label)}</span>`).join('')}</div>`;
-}
-
-function renderStatusBars(targetId, rows, emptyMessage) {
-    const target = document.getElementById(targetId);
-    if (!target) return;
-    const total = rows.reduce((sum, row) => sum + row.value, 0);
-    if (!total) return emptyChart(target, emptyMessage);
-    target.innerHTML = rows.filter(row => row.value > 0).map(row => `<div class="metric-bar-row"><div class="metric-bar-label"><span>${safeText(row.label)}</span><strong>${row.value}</strong></div><div class="metric-bar-track"><span style="width:${Math.max(5, (row.value / total) * 100)}%;background:${row.color}"></span></div></div>`).join('');
-}
-
-function renderStockChart() {
-    const target = document.getElementById('stock-chart');
-    if (!target) return;
-    const rows = [...sampleProducts].sort((a, b) => Number(a.stock) - Number(b.stock)).slice(0, 5).filter(item => item && item.name);
-    if (!rows.length) return emptyChart(target, 'لا توجد منتجات حالياً.');
-    const max = Math.max(...rows.map(item => Number(item.stock) || 0), 1);
-    target.innerHTML = rows.map(item => `<div class="metric-bar-row"><div class="metric-bar-label"><span title="${safeText(item.name)}">${safeText(item.name)}</span><strong>${Number(item.stock) || 0}</strong></div><div class="metric-bar-track"><span class="stock-bar-fill" style="width:${Math.max(4, ((Number(item.stock) || 0) / max) * 100)}%"></span></div></div>`).join('');
-}
-
-function renderOverviewCharts() {
-    if (overviewCan('orders.view')) {
-        renderOrdersTrendChart();
-        const orderStatuses = {};
-        sampleOrders.forEach(order => { const key = String(order.status || 'غير محدد'); orderStatuses[key] = (orderStatuses[key] || 0) + 1; });
-        renderStatusBars('orders-status-chart', Object.entries(orderStatuses).map(([label, value]) => ({ label, value, color: '#1a6b3c' })), 'لا توجد طلبات حالياً.');
-    }
-    if (overviewCan('products.view')) renderStockChart();
-    if (overviewCan('complaints.view')) {
-        const complaintStatuses = {};
-        sampleComplaints.forEach(item => { const key = String(item.status || 'جديد'); complaintStatuses[key] = (complaintStatuses[key] || 0) + 1; });
-        renderStatusBars('complaints-status-chart', Object.entries(complaintStatuses).map(([label, value]) => ({ label, value, color: '#c9a227' })), 'لا توجد شكاوى حالياً.');
-    }
-}
-
-function initOverviewTools() {
-    applyOverviewVisibility();
-    const staffOpen = document.getElementById('staff-help-open');
-    const ownerOpen = document.getElementById('owner-help-open');
-    if (staffOpen) staffOpen.hidden = !window.ADMIN_SESSION || window.ADMIN_SESSION.owner === true;
-    if (ownerOpen) ownerOpen.hidden = window.ADMIN_SESSION?.owner !== true;
-    if (overviewToolsStarted) return;
-    overviewToolsStarted = true;
-    staffOpen?.addEventListener('click', () => document.getElementById('staff-help-panel')?.toggleAttribute('hidden'));
-    ownerOpen?.addEventListener('click', () => document.getElementById('owner-help-panel')?.toggleAttribute('hidden'));
-    document.getElementById('staff-help-close')?.addEventListener('click', () => { document.getElementById('staff-help-panel').hidden = true; });
-    document.getElementById('owner-help-close')?.addEventListener('click', () => { document.getElementById('owner-help-panel').hidden = true; });
-    document.getElementById('staff-help-form')?.addEventListener('submit', submitStaffHelpRequest);
-    document.getElementById('owner-help-list')?.addEventListener('click', handleOwnerHelpClick);
-    document.getElementById('staff-help-list')?.addEventListener('click', handleStaffHelpClick);
-    loadHelpRequests();
-}
-
-async function loadHelpRequests() {
-    if (!window.ADMIN_SESSION) return;
-    try {
-        const response = await window.adminFetch('/api/admin?action=staff_help_list', { credentials: 'include' });
-        if (!response.ok) throw new Error(await response.text());
-        overviewHelpRows = await response.json();
-        if (window.ADMIN_SESSION.owner === true) renderOwnerHelpRequests(overviewHelpRows);
-        else renderStaffHelpRequests(overviewHelpRows);
-    } catch (error) {
-        console.error('[staff-help-list]', error);
-        const target = window.ADMIN_SESSION.owner === true ? document.getElementById('owner-help-list') : document.getElementById('staff-help-list');
-        if (target) target.innerHTML = '<p class="text-subtle">طلبات المساعدة هتظهر بعد تجهيز جدولها في Supabase.</p>';
-    }
-}
-
-function renderStaffHelpRequests(rows) {
-    const target = document.getElementById('staff-help-list');
-    if (!target) return;
-    const unread = rows.filter(row => row.status === 'replied' && !row.read_at).length;
-    const badge = document.getElementById('help-unread-badge');
-    if (badge) { badge.hidden = unread === 0; badge.textContent = unread; }
-    if (!rows.length) { target.innerHTML = '<p class="text-subtle">لسه مفيش طلبات مرسلة.</p>'; return; }
-    target.innerHTML = rows.map(row => `<article class="help-item ${row.status === 'replied' && !row.read_at ? 'is-unread' : ''}"><div class="help-item-head"><strong>${safeText(row.subject)}</strong><span>${safeText(row.status === 'replied' ? 'تم الرد' : 'قيد المراجعة')}</span></div><p>${safeText(row.message)}</p>${row.owner_reply || row.owner_reply_image_url ? `<div class="help-reply"><strong>رد المالك</strong>${row.owner_reply ? `<p>${safeText(row.owner_reply)}</p>` : ''}${row.owner_reply_image_url ? `<a href="${safeText(row.owner_reply_image_url)}" target="_blank" rel="noopener noreferrer"><img src="${safeText(row.owner_reply_image_url)}" alt="الصورة التوضيحية من المالك"></a>` : ''}${row.status === 'replied' && !row.read_at ? `<button class="btn btn-ghost btn-sm" data-help-mark-read="${Number(row.id)}" type="button">تمت القراءة</button>` : ''}</div>` : ''}</article>`).join('');
-}
-
-function renderOwnerHelpRequests(rows) {
-    const target = document.getElementById('owner-help-list');
-    if (!target) return;
-    const badge = document.getElementById('help-unread-badge');
-    const pending = rows.filter(row => row.status === 'pending').length;
-    if (badge) { badge.hidden = pending === 0; badge.textContent = pending; }
-    if (!rows.length) { target.innerHTML = '<p class="text-subtle">لا توجد طلبات مساعدة حالياً.</p>'; return; }
-    target.innerHTML = rows.map(row => `<article class="help-item ${row.status === 'pending' ? 'is-unread' : ''}"><div class="help-item-head"><div><strong>${safeText(row.subject)}</strong><small>${safeText(row.staff_name)}${row.staff_phone ? ` — ${safeText(row.staff_phone)}` : ''}</small></div><span>${safeText(row.status === 'pending' ? 'محتاج رد' : 'تم الرد')}</span></div><p>${safeText(row.message)}</p>${row.owner_reply || row.owner_reply_image_url ? `<div class="help-reply"><strong>الرد الحالي</strong>${row.owner_reply ? `<p>${safeText(row.owner_reply)}</p>` : ''}${row.owner_reply_image_url ? `<a href="${safeText(row.owner_reply_image_url)}" target="_blank" rel="noopener noreferrer"><img src="${safeText(row.owner_reply_image_url)}" alt="الصورة المرفقة"></a>` : ''}</div>` : ''}<div class="help-reply-composer" data-help-composer="${Number(row.id)}"><textarea class="form-control" data-help-reply-text="${Number(row.id)}" rows="2" maxlength="2000" placeholder="اكتب ردك أو وضح له النقطة في الصورة..."></textarea><label class="help-image-upload"><i class="fa-solid fa-image"></i><span data-help-file-name="${Number(row.id)}">إرفاق Screenshot</span><input type="file" accept="image/png,image/jpeg,image/webp" data-help-image="${Number(row.id)}"></label><button class="btn btn-primary btn-sm" data-help-reply="${Number(row.id)}" type="button"><i class="fa-solid fa-reply"></i> إرسال الرد</button></div></article>`).join('');
-}
-
-async function submitStaffHelpRequest(event) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const button = form.querySelector('button[type="submit"]');
-    const subject = document.getElementById('staff-help-subject')?.value.trim();
-    const message = document.getElementById('staff-help-message')?.value.trim();
-    if (!subject || !message) return alert('اكتب عنوان الطلب وتفاصيله.');
-    button.disabled = true;
-    try {
-        const response = await window.adminFetch('/api/admin?action=staff_help_create', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subject, message }) });
-        if (!response.ok) throw new Error(await response.text());
-        form.reset();
-        await loadHelpRequests();
-        alert('تم إرسال طلبك للمالك.');
-    } catch (error) { alert(readableError(error, 'تعذر إرسال طلب المساعدة حالياً.')); }
-    finally { button.disabled = false; }
-}
-
-async function handleStaffHelpClick(event) {
-    const button = event.target.closest('[data-help-mark-read]');
-    if (!button) return;
-    button.disabled = true;
-    const response = await window.adminFetch('/api/admin?action=staff_help_mark_read', { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ request_id: Number(button.dataset.helpMarkRead) }) });
-    if (response.ok) loadHelpRequests(); else button.disabled = false;
-}
-
-async function handleOwnerHelpClick(event) {
-    const fileInput = event.target.closest('[data-help-image]');
-    if (fileInput) {
-        const name = document.querySelector(`[data-help-file-name="${Number(fileInput.dataset.helpImage)}"]`);
-        if (name) name.textContent = fileInput.files?.[0]?.name || 'إرفاق Screenshot';
-        return;
-    }
-    const button = event.target.closest('[data-help-reply]');
-    if (!button) return;
-    const requestId = Number(button.dataset.helpReply);
-    const text = document.querySelector(`[data-help-reply-text="${requestId}"]`)?.value.trim() || '';
-    const file = document.querySelector(`[data-help-image="${requestId}"]`)?.files?.[0];
-    button.disabled = true;
-    try {
-        let imageUrl = null;
-        if (file) imageUrl = await Supabase.upload(file);
-        const response = await window.adminFetch('/api/admin?action=staff_help_reply', { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ request_id: requestId, reply: text, image_url: imageUrl }) });
-        if (!response.ok) throw new Error(await response.text());
-        await loadHelpRequests();
-        alert('تم إرسال الرد للموظف.');
-    } catch (error) { alert(readableError(error, 'تعذر إرسال الرد حالياً.')); }
-    finally { button.disabled = false; }
 }
 
 // ==========================================
@@ -712,11 +174,6 @@ function initNavigation() {
             item.classList.add('active');
 
             const target = item.getAttribute('data-target');
-            const navPermissions = { orders: 'orders.view', products: 'products.view', categories: 'categories.view', complaints: 'complaints.view', settings: 'landing.view' };
-            if (target && navPermissions[target] && !can(navPermissions[target])) {
-                item.classList.remove('active');
-                return;
-            }
             if (target) {
                 viewPanes.forEach(p => p.classList.remove('active'));
                 const activePane = document.getElementById('view-' + target);
@@ -772,6 +229,13 @@ function initNavigation() {
     // Settings Sidebar Subtabs
     const settingsTabBtns = document.querySelectorAll('.settings-tab-btn');
     const tabContentItems = document.querySelectorAll('.tab-content-item');
+    document.querySelectorAll('.settings-main-tab').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.settings-main-tab').forEach(item => item.classList.remove('active'));
+            btn.classList.add('active');
+        });
+    });
+
     settingsTabBtns.forEach(btn => {
         btn.addEventListener('click', () => {
             settingsTabBtns.forEach(b => b.classList.remove('active'));
@@ -832,15 +296,11 @@ function initAswanShippingCalc() {
 // 5. ORDERS SYSTEM & EXACT BOSTA EXCEL EXPORT (V3.5)
 // ==========================================
 let sampleOrders = [];
-let customerRequests = [];
 let sampleProducts = [];
 let sampleCategories = [];
 
 async function initOrdersSystem() {
-    const [orders, requests] = await Promise.all([sb_fetch('orders'), sb_fetch('order_customer_requests').catch(() => [])]);
-    sampleOrders = orders || [];
-    customerRequests = requests || [];
-    renderCustomerRequests(customerRequests);
+    sampleOrders = await sb_fetch('orders') || [];
     renderOrders(sampleOrders);
 
     // Search filter
@@ -917,47 +377,20 @@ async function initOrdersSystem() {
             const ws = XLSX.utils.aoa_to_sheet(wsData);
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Bosta_Upload");
-            XLSX.writeFile(wb, `bosta_orders_export_${new Date().toISOString().split('T')[0]}.xlsx`);
+            exportBtn.disabled = true;
+            exportBtn.setAttribute('aria-busy', 'true');
+            const originalLabel = exportBtn.textContent;
+            exportBtn.textContent = 'جاري تجهيز الملف...';
+            try {
+                XLSX.writeFile(wb, `bosta_orders_export_${new Date().toISOString().split('T')[0]}.xlsx`);
+            } finally {
+                exportBtn.disabled = false;
+                exportBtn.removeAttribute('aria-busy');
+                exportBtn.textContent = originalLabel;
+            }
         });
     }
 }
-
-function renderCustomerRequests(requests = []) {
-    const panel = document.getElementById('customer-requests-panel');
-    const container = document.getElementById('customer-requests-container');
-    const count = document.getElementById('customer-requests-count');
-    if (!panel || !container) return;
-    const pendingCount = requests.filter(request => request.status === 'pending').length;
-    panel.hidden = !requests.length;
-    if (count) count.textContent = `${pendingCount} معلّق`;
-    if (!requests.length) { container.innerHTML = ''; return; }
-    const orderById = new Map(sampleOrders.map(order => [String(order.id), order]));
-    container.innerHTML = requests.slice(0, 40).map(request => {
-        const order = orderById.get(String(request.orderId));
-        const typeLabel = request.type === 'cancel' ? 'طلب إلغاء' : 'طلب تعديل بيانات التوصيل';
-        const statusLabel = request.status === 'pending' ? 'قيد المراجعة' : request.status === 'applied' ? 'تم التنفيذ' : 'تم الرفض';
-        const changeLabels = { customer_name: 'الاسم', customer_phone: 'الموبايل', governorate: 'المحافظة', area: 'المنطقة', address: 'العنوان', notes: 'الملاحظات' };
-        const changes = Object.entries(request.changes || {}).map(([key, value]) => `<div><strong>${safeText(changeLabels[key] || key)}:</strong> ${safeText(value)}</div>`).join('');
-        const controls = request.status === 'pending' && can('orders.update_status') ? `<div class="customer-request-actions"><input id="request-note-${safeText(request.id)}" class="form-control" placeholder="ملاحظة داخلية اختيارية" maxlength="500"><button class="btn btn-primary btn-sm" onclick="reviewCustomerRequest('${safeText(request.id)}','approve')">قبول وتنفيذ</button><button class="btn btn-danger btn-sm" onclick="reviewCustomerRequest('${safeText(request.id)}','reject')">رفض</button></div>` : '';
-        return `<article class="customer-request-card"><div class="customer-request-header"><strong>${safeText(typeLabel)} — طلب #${safeText(request.orderId)}</strong><span class="badge ${request.status === 'pending' ? 'badge-new' : 'badge-process'}">${safeText(statusLabel)}</span></div><div class="customer-request-meta">${safeText(request.createdAt)}${order?.name ? ` · ${safeText(order.name)}` : ''}${order?.phone ? ` · ${safeText(order.phone)}` : ''}</div><p><strong>السبب:</strong> ${safeText(request.reason)}</p>${changes ? `<div class="customer-request-changes"><strong>التعديل المطلوب:</strong>${changes}</div>` : ''}${order?.tracking_number && order.tracking_number !== '—' ? `<p class="text-danger text-sm">يوجد رقم تتبع Bosta: ${safeText(order.tracking_number)} — لا يتم التعديل أو الإلغاء تلقائياً.</p>` : ''}${controls}</article>`;
-    }).join('');
-}
-
-window.reviewCustomerRequest = async function(requestId, decision) {
-    const note = document.getElementById(`request-note-${requestId}`)?.value?.trim() || '';
-    try {
-        const response = await window.adminFetch('/api/admin?action=review_customer_request', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ request_id: requestId, decision, admin_note: note }) });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.error || 'تعذر مراجعة طلب العميل');
-        const [orders, requests] = await Promise.all([sb_fetch('orders'), sb_fetch('order_customer_requests')]);
-        sampleOrders = orders || [];
-        customerRequests = requests || [];
-        renderCustomerRequests(customerRequests);
-        renderOrders(sampleOrders);
-    } catch (error) {
-        alert(readableError(error, 'تعذر مراجعة طلب العميل حالياً.'));
-    }
-};
 
 function renderOrders(orders) {
     const container = document.getElementById('orders-cards-container');
@@ -971,11 +404,8 @@ function renderOrders(orders) {
     container.innerHTML = orders.map((o, idx) => {
         const total = ((o.subtotal || 0) + (o.shipping || 0)).toFixed(2);
         const trackingHtml = o.tracking_number && o.tracking_number !== '—'
-            ? `<span class="text-subtle text-sm block mt-1"><i class="fa-solid fa-truck"></i> بوليصة: <strong dir="ltr">${safeText(o.tracking_number)}</strong></span>`
-            : o.bosta_status === 'failed'
-                ? `<span class="text-danger text-sm block mt-1"><i class="fa-solid fa-triangle-exclamation"></i> فشل إنشاء بوليصة Bosta</span>`
-                : `<span class="text-subtle text-sm block mt-1 opacity-50">لا يوجد رقم بوليصة حتى الآن</span>`;
-        const bostaActions = o.tracking_number && o.tracking_number !== '—' ? `${can('bosta.print_awb') ? `<button class="btn btn-ghost btn-sm" onclick="printBostaAwb('${safeText(o.id)}','A4')"><i class="fa-solid fa-file-pdf"></i> طباعة AWB</button>` : ''}${can('bosta.pack') ? `<button class="btn btn-primary btn-sm" onclick="markOrderPacked('${safeText(o.id)}')"><i class="fa-solid fa-box"></i> تم التغليف</button>` : ''}${can('bosta.request_pickup') && !o.bosta_pickup_id ? `<button class="btn btn-secondary btn-sm" onclick="requestOrderBostaPickup('${safeText(o.id)}')"><i class="fa-solid fa-truck-ramp-box"></i> طلب المندوب</button>` : (o.bosta_pickup_id ? `<span class="badge badge-resolved">Pickup مطلوب</span>${can('bosta.cancel_pickup') && window.ADMIN_SESSION?.owner === true ? `<button class="btn btn-danger-ghost btn-sm" onclick="cancelBostaPickup('${safeText(o.id)}','${safeText(o.bosta_pickup_id)}')">إلغاء Pickup</button>` : ''}` : '')}${can('bosta.cancel_delivery') && o.bosta_delivery_id ? `<button class="btn btn-danger-ghost btn-sm" onclick="cancelBostaDelivery('${safeText(o.id)}','${safeText(o.bosta_delivery_id)}')"><i class="fa-solid fa-ban"></i> إلغاء الشحنة</button>` : ''}` : '';
+            ? `<span class="text-subtle text-sm block mt-1"><i class="fa-solid fa-truck"></i> بوليصة: <strong dir="ltr">${o.tracking_number}</strong></span>`
+            : `<span class="text-subtle text-sm block mt-1 opacity-50">لا يوجد رقم بوليصة حتى الآن</span>`;
 
         return `
             <div class="order-card glass-panel" data-idx="${idx}">
@@ -1015,7 +445,9 @@ function renderOrders(orders) {
                     <div>
                         <span class="text-subtle text-sm block mb-1">الشحن (تعديل يدوي):</span>
                         <div class="flex-align gap-1">
-                            ${can('orders.update_customer') ? `<input type="number" class="editable-shipping-input" value="${(o.shipping||0).toFixed(2)}" onchange="updateOrderShipping('${o.id}', ${idx}, this.value)">` : `<span class="text-subtle text-sm">${(o.shipping||0).toFixed(2)}</span>`}
+                            <input type="number" class="editable-shipping-input"
+                                value="${(o.shipping||0).toFixed(2)}"
+                                onchange="updateOrderShipping('${o.id}', ${idx}, this.value)">
                             <span class="text-subtle text-sm">ج.م</span>
                         </div>
                         <span class="text-subtle text-sm block mt-1" style="font-size:0.72rem;">عقد أسوان بوسطة</span>
@@ -1023,9 +455,8 @@ function renderOrders(orders) {
                 </div>
 
                 <div class="order-card-footer">
-                    <div class="flex-align gap-2 flex-wrap">
+                    <div class="flex-align gap-2">
                         <button class="btn btn-ghost btn-sm" onclick="window.print()"><i class="fa-solid fa-print"></i> طباعة</button>
-                        ${bostaActions}
                     </div>
                     <span class="text-subtle text-sm">فرعي: ${(o.subtotal||0).toFixed(2)} | إجمالي: <strong class="text-primary">${total} ج.م</strong></span>
                 </div>
@@ -1033,121 +464,6 @@ function renderOrders(orders) {
         `;
     }).join('');
 }
-
-function nextBostaPickupDate() {
-    const date = new Date();
-    date.setHours(0, 0, 0, 0);
-    date.setDate(date.getDate() + 1);
-    while (date.getDay() === 5) date.setDate(date.getDate() + 1);
-    const yyyy = date.getFullYear();
-    const mm = String(date.getMonth() + 1).padStart(2, '0');
-    const dd = String(date.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}`;
-}
-
-window.requestOrderBostaPickup = async function(orderId) {
-    if (!can('bosta.request_pickup')) return alert('ليس لديك صلاحية طلب استلام المندوب.');
-    const scheduledDate = window.prompt('اكتب تاريخ استلام المندوب بصيغة YYYY-MM-DD. يوم الجمعة غير مسموح.', nextBostaPickupDate());
-    if (scheduledDate === null) return;
-    try {
-        const response = await window.adminFetch('/api/bosta-create-delivery', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'request_pickup', order_id: orderId, scheduled_date: scheduledDate.trim(), number_of_parcels: 1 }) });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok || !data.ok) throw new Error(data.error || 'تعذر طلب استلام المندوب');
-        const order = sampleOrders.find(row => String(row.id) === String(orderId));
-        if (order) order.bosta_pickup_id = data.pickup_id || 'requested';
-        renderOrders(sampleOrders);
-        alert(`${data.message || 'تم إرسال طلب استلام المندوب إلى Bosta.'}${data.pickup_id ? `\nرقم طلب الاستلام: ${data.pickup_id}` : ''}`);
-    } catch (error) { alert(readableError(error, 'تعذر طلب استلام المندوب من Bosta حالياً.')); }
-};
-
-window.cancelBostaDelivery = async function(orderId, deliveryId) {
-    if (!can('bosta.cancel_delivery')) return alert('ليس لديك صلاحية إلغاء الشحنة.');
-    const reason = window.prompt('اكتب سبب إلغاء الشحنة (إجباري، 5 أحرف على الأقل):');
-    if (reason === null || reason.trim().length < 5) return alert('سبب الإلغاء إجباري ولا يقل عن 5 أحرف.');
-    if (!window.confirm('تأكيد: سيتم إلغاء شحنة Bosta وتغيير حالة الأوردر إلى ملغي. هل تريد المتابعة؟')) return;
-    try {
-        const response = await window.adminFetch(`/api/admin?action=cancel_bosta_delivery&id=${encodeURIComponent(orderId)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order_id: orderId, bosta_delivery_id: deliveryId, reason: reason.trim(), confirm: true }) });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.error || 'تعذر إلغاء الشحنة');
-        await refreshDashboardData();
-        alert(data.pickup_requires_review ? 'تم إلغاء الشحنة من Bosta. يوجد Pickup مرتبط يحتاج مراجعة المالك لأنه قد يكون Batch.' : 'تم إلغاء الشحنة وتحديث الأوردر.');
-    } catch (error) { alert(readableError(error, 'تعذر إلغاء الشحنة من Bosta حالياً.')); }
-};
-
-window.cancelBostaPickup = async function(orderId, pickupId) {
-    if (window.ADMIN_SESSION?.owner !== true) return alert('إلغاء Pickup متاح للمالك فقط.');
-    const reason = window.prompt('تنبيه: إلغاء Pickup يلغي دفعة الاستلام كلها وقد يؤثر على طرود أخرى. اكتب السبب:');
-    if (reason === null || reason.trim().length < 5) return alert('سبب الإلغاء إجباري ولا يقل عن 5 أحرف.');
-    if (!window.confirm('تأكيد نهائي: إلغاء Pickup من Bosta لكل الطرود داخل الدفعة؟')) return;
-    try {
-        const response = await window.adminFetch(`/api/admin?action=cancel_bosta_pickup&id=${encodeURIComponent(orderId)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order_id: orderId, pickup_id: pickupId, reason: reason.trim(), confirm: true }) });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.error || 'تعذر إلغاء Pickup');
-        await refreshDashboardData();
-        alert('تم تأكيد إلغاء Pickup من Bosta وتحديث السجل المحلي.');
-    } catch (error) { alert(readableError(error, 'تعذر إلغاء Pickup من Bosta حالياً.')); }
-};
-
-window.requestBostaPickup = async function() {
-    if (!can('bosta.request_pickup')) return alert('ليس لديك صلاحية طلب استلام المندوب.');
-    const readyCount = sampleOrders.filter(row => row.tracking_number && row.tracking_number !== '—' && !['تم التسليم', 'ملغي', 'مرفوض', 'مرتجع'].includes(String(row.status || ''))).length || 1;
-    const scheduledDate = window.prompt('اكتب تاريخ استلام المندوب بصيغة YYYY-MM-DD. يوم الجمعة غير مسموح.', nextBostaPickupDate());
-    if (scheduledDate === null) return;
-    const parcelsValue = window.prompt('عدد الطرود التي سيستلمها المندوب؟', String(readyCount));
-    if (parcelsValue === null) return;
-    const button = document.getElementById('request-bosta-pickup-btn');
-    if (button) { button.disabled = true; button.dataset.originalText = button.textContent; button.textContent = 'جاري طلب المندوب…'; }
-    try {
-        const response = await window.adminFetch('/api/bosta-create-delivery', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'request_pickup', scheduled_date: scheduledDate.trim(), number_of_parcels: Number(parcelsValue) }) });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok || !data.ok) throw new Error(data.error || 'تعذر طلب استلام المندوب');
-        alert(`${data.message || 'تم إرسال طلب استلام المندوب إلى Bosta.'}\nالتاريخ: ${data.scheduled_date}\nعدد الطرود: ${data.number_of_parcels}`);
-    } catch (error) {
-        alert(readableError(error, 'تعذر طلب استلام المندوب من Bosta حالياً.'));
-    } finally {
-        if (button) { button.disabled = false; button.textContent = button.dataset.originalText || 'طلب استلام المندوب'; }
-    }
-};
-
-function initBostaPickupControl() {
-    const button = document.getElementById('request-bosta-pickup-btn');
-    if (!button) return;
-    button.hidden = !can('bosta.request_pickup');
-    if (button.dataset.bound === '1') return;
-    button.addEventListener('click', window.requestBostaPickup);
-    button.dataset.bound = '1';
-}
-
-window.printBostaAwb = async function(orderId, awbType = 'A4') {
-    try {
-        const response = await window.adminFetch('/api/bosta-create-delivery', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'print_awb', order_id: orderId, awb_type: awbType }) });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok || !data.ok) throw new Error(data.error || 'تعذر طباعة البوليصة');
-        if (data.pdf_base64) {
-            const bytes = Uint8Array.from(atob(data.pdf_base64), char => char.charCodeAt(0));
-            const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
-            window.open(url, '_blank', 'noopener,noreferrer');
-            setTimeout(() => URL.revokeObjectURL(url), 60000);
-        } else {
-            alert(data.message || 'تم إرسال طلب طباعة البوليصة إلى Bosta.');
-        }
-    } catch (error) {
-        alert(readableError(error, 'تعذر طباعة بوليصة Bosta حالياً.'));
-    }
-};
-
-window.markOrderPacked = async function(orderId) {
-    try {
-        const response = await window.adminFetch('/api/bosta-create-delivery', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'mark_packed', order_id: orderId }) });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok || !data.ok) throw new Error(data.error || 'تعذر تأكيد التغليف');
-        const order = sampleOrders.find(row => String(row.id) === String(orderId));
-        if (order) order.status = data.status || 'قيد التجهيز';
-        renderOrders(sampleOrders);
-    } catch (error) {
-        alert(readableError(error, 'تعذر تأكيد التغليف حالياً.'));
-    }
-};
 
 window.updateOrderShipping = async function(orderId, idx, newShippingVal) {
     const val = parseFloat(newShippingVal) || 0;
@@ -1167,55 +483,27 @@ window.updateOrderShipping = async function(orderId, idx, newShippingVal) {
 // ==========================================
 
 async function initProductsAndCategories() {
-    const canProducts = can('products.view');
-    const canCategories = can('categories.view');
-    const [rawProducts, categories, links] = await Promise.all([
-        canProducts ? sb_fetch('products') : Promise.resolve([]),
-        canCategories ? sb_fetch('categories') : Promise.resolve([]),
-        canProducts || canCategories ? Supabase.select('product_categories').catch(() => []) : Promise.resolve([])
-    ]);
-    sampleCategories = categories || [];
-    sampleProducts = attachProductCategories(rawProducts || [], links || []);
+    sampleProducts = await sb_fetch('products') || [];
+    sampleCategories = await sb_fetch('categories') || [];
     renderProducts(sampleProducts);
     renderCategories(sampleCategories);
     populateCategoryDropdowns();
     renderGalleryUploaderSlots([]);
+    initBulkProductImport();
 
-    // Product Filters & Search
+    // Product Search
     const searchProd = document.getElementById('search-products-input');
-    const filterActive = document.getElementById('filter-products-active');
-    const filterArchived = document.getElementById('filter-products-archived');
-    let currentProductFilter = 'active';
-
-    const applyProductFilters = () => {
-        const q = searchProd?.value?.toLowerCase() || '';
-        const filtered = sampleProducts.filter(p => {
-            const matchesSearch = [p.name, p.sku, p.category].some(v => String(v || '').toLowerCase().includes(q));
-            const matchesArchive = currentProductFilter === 'archived' ? p.is_archived : !p.is_archived;
-            return matchesSearch && matchesArchive;
-        });
-        renderProducts(filtered);
-    };
-
-    if (filterArchived) {
-        filterArchived.hidden = (window.ADMIN_SESSION?.owner !== true);
-        filterArchived.addEventListener('click', () => {
-            currentProductFilter = 'archived';
-            filterActive.classList.remove('active-filter');
-            filterArchived.classList.add('active-filter');
-            applyProductFilters();
+    if (searchProd) {
+        searchProd.addEventListener('input', (e) => {
+            const q = e.target.value.toLowerCase();
+            const filtered = sampleProducts.filter(p => {
+                const values = [p.name, p.sku, p.category]
+                    .map(value => String(value || '').toLowerCase());
+                return values.some(value => value.includes(q));
+            });
+            renderProducts(filtered);
         });
     }
-    if (filterActive) {
-        filterActive.addEventListener('click', () => {
-            currentProductFilter = 'active';
-            filterArchived.classList.remove('active-filter');
-            filterActive.classList.add('active-filter');
-            applyProductFilters();
-        });
-    }
-    if (searchProd) searchProd.addEventListener('input', applyProductFilters);
-    applyProductFilters();
 
     // Add Product Modal Trigger
     const openAddProductModalBtn = document.getElementById('open-add-product-modal');
@@ -1227,10 +515,8 @@ async function initProductsAndCategories() {
             if (productForm) productForm.reset();
             document.getElementById('p-edit-id').value = '';
             document.getElementById('product-modal-title').textContent = 'إضافة منتج جديد';
-            const sizeSelect = document.getElementById('p-bosta-size');
-            if (sizeSelect) sizeSelect.value = '140';
             populateCategoryDropdowns();
-            renderGalleryUploaderSlots([], true);
+            renderGalleryUploaderSlots([]);
             productModal.classList.remove('hidden');
         });
     }
@@ -1244,54 +530,36 @@ async function initProductsAndCategories() {
 
             try {
                 const editId = document.getElementById('p-edit-id')?.value;
-                const name = document.getElementById('p-name')?.value?.trim();
-                const sku = document.getElementById('p-sku')?.value?.trim();
-                const price = parseFloat(document.getElementById('p-price')?.value);
-                const saleRaw = document.getElementById('p-sale-price')?.value?.trim() || '';
-                const salePrice = saleRaw === '' ? null : parseFloat(saleRaw);
-                const stockVal = parseInt(document.getElementById('p-stock')?.value, 10);
-                const thresholdVal = parseInt(document.getElementById('p-stock-threshold')?.value, 10);
-
-                const categorySelect = document.getElementById('p-category-select');
-                const selectedOptions = Array.from(categorySelect?.selectedOptions || []);
-                const categoryIds = selectedOptions.map(option => Number(option.dataset.id)).filter(Number.isInteger);
-                if (categoryIds.length && !can('categories.assign')) throw new Error('ليس لديك صلاحية ربط المنتج بالأقسام.');
+                const stockVal = parseInt(document.getElementById('p-stock')?.value) || 0;
+                const thresholdVal = parseInt(document.getElementById('p-stock-threshold')?.value) || 5;
 
                 const newProd = {
-                    name,
-                    sku,
-                    price,
-                    salePrice,
-                    stock: Number.isFinite(stockVal) ? stockVal : 0,
-                    stockThreshold: Number.isFinite(thresholdVal) && thresholdVal >= 0 ? thresholdVal : 5,
-                    bostaSize: parseFloat(document.getElementById('p-bosta-size')?.value) || 140,
-                    category: selectedOptions[0]?.value || '',
-                    categoryIds,
+                    name: document.getElementById('p-name')?.value,
+                    sku: document.getElementById('p-sku')?.value,
+                    price: parseFloat(document.getElementById('p-price')?.value),
+                    salePrice: document.getElementById('p-sale-price')?.value,
+                    stock: stockVal,
+                    stockThreshold: thresholdVal,
+                    bostaSize: parseFloat(document.getElementById('p-bosta-size')?.value),
+                    category: document.getElementById('p-category-select')?.value,
                     bestseller: document.getElementById('p-tag-bestseller')?.checked,
-                    desc: document.getElementById('p-desc')?.value?.trim(),
+                    desc: document.getElementById('p-desc')?.value,
                     images: currentEditingImages
                 };
-                if (!newProd.name || !newProd.sku || !Number.isFinite(newProd.price) || newProd.price < 0) throw new Error('راجع اسم المنتج وSKU والسعر.');
-                if (newProd.stock < 0) throw new Error('المخزون لا يمكن أن يكون بالسالب.');
-                if (salePrice !== null && (!Number.isFinite(salePrice) || salePrice <= 0 || salePrice >= newProd.price)) throw new Error('سعر العرض لازم يكون أكبر من صفر وأقل من السعر الأساسي.');
 
-                let saved;
-                if (editId) saved = await sb_update('products', editId, newProd);
-                else saved = await sb_insert('products', newProd);
-                const savedId = editId || saved?.id;
-                if (!savedId) throw new Error('الخادم لم يرجع معرف المنتج بعد الحفظ. لم يتم تأكيد الإضافة.');
-                if (typeof Supabase.replaceProductCategories === 'function' && (can('categories.assign') || categoryIds.length)) {
-                    await Supabase.replaceProductCategories(savedId, categoryIds);
+                if (editId) {
+                    await sb_update('products', editId, newProd);
+                } else {
+                    await sb_insert('products', newProd);
                 }
-                const imageCleanup = editId ? await cleanReplacedImages(originalEditingImages, currentEditingImages) : { failed: 0 };
 
+                sampleProducts = await sb_fetch('products') || [];
+                renderProducts(sampleProducts);
                 productModal.classList.add('hidden');
-                if (imageCleanup.failed) alert('تم حفظ المنتج، لكن تعذر حذف صورة قديمة من التخزين.');
-                await refreshDashboardData();
                 alert('تم حفظ المنتج بنجاح!');
             } catch(error) {
-                alert('تعذر حفظ المنتج: ' + readableError(error, 'راجع البيانات وحاول مرة أخرى.'));
-                console.error('[product save]', error);
+                alert('حدث خطأ أثناء الحفظ. يرجى المحاولة لاحقاً.');
+                console.error(error);
             } finally {
                 if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = originalText; }
             }
@@ -1303,54 +571,10 @@ async function initProductsAndCategories() {
     const categoryModal = document.getElementById('category-modal');
     const categoryForm = document.getElementById('category-form');
 
-    const catImageFile = document.getElementById('cat-image-file');
-    const catImageUrl = document.getElementById('cat-image-url');
-    const catImagePreviewWrap = document.getElementById('cat-image-preview-wrap');
-    const catImagePreview = document.getElementById('cat-image-preview');
-    const catImageRemove = document.getElementById('cat-image-remove');
-    const updateCategoryImagePreview = (url) => {
-        const value = String(url || '').trim();
-        if (catImageUrl) catImageUrl.value = value;
-        if (catImagePreview) catImagePreview.src = value || 'assets/images/logo.png';
-        if (catImagePreviewWrap) catImagePreviewWrap.hidden = !value;
-    };
-    catImageFile?.addEventListener('change', async () => {
-        const file = catImageFile.files?.[0];
-        if (!file) return;
-        try {
-            if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) throw new Error('نوع الصورة غير مسموح؛ استخدم PNG أو JPEG أو WebP.');
-            if (file.size > 5 * 1024 * 1024) throw new Error('حجم الصورة أكبر من 5 ميجابايت.');
-            const localUrl = URL.createObjectURL(file);
-            updateCategoryImagePreview(localUrl);
-            catImagePreview?.addEventListener('load', () => URL.revokeObjectURL(localUrl), { once: true });
-            const previousUploadedUrl = uploadedCategoryImageUrl;
-            const uploadedUrl = await sb_upload(file);
-            uploadedCategoryImageUrl = uploadedUrl;
-            updateCategoryImagePreview(uploadedUrl);
-            if (previousUploadedUrl && previousUploadedUrl !== originalCategoryImageUrl) {
-                await Supabase.removeStorageFile(previousUploadedUrl).catch(error => console.warn('[category image cleanup]', error.message));
-            }
-        } catch (error) {
-            catImageFile.value = '';
-            updateCategoryImagePreview(catImageUrl?.value || '');
-            alert('تعذر رفع صورة القسم: ' + readableError(error, 'راجع نوع وحجم الصورة وصلاحيات الحساب.'));
-        }
-    });
-    catImageRemove?.addEventListener('click', () => {
-        if (catImageFile) catImageFile.value = '';
-        const uploadedUrl = uploadedCategoryImageUrl;
-        uploadedCategoryImageUrl = '';
-        updateCategoryImagePreview('');
-        if (uploadedUrl && uploadedUrl !== originalCategoryImageUrl) Supabase.removeStorageFile(uploadedUrl).catch(error => console.warn('[category image cleanup]', error.message));
-    });
-
     if (openAddCatBtn && categoryModal) {
         openAddCatBtn.addEventListener('click', () => {
             if (categoryForm) categoryForm.reset();
             document.getElementById('cat-edit-id').value = '';
-            originalCategoryImageUrl = '';
-            uploadedCategoryImageUrl = '';
-            updateCategoryImagePreview('');
             document.getElementById('cat-modal-title').textContent = 'إضافة قسم جديد';
             categoryModal.classList.remove('hidden');
         });
@@ -1359,29 +583,20 @@ async function initProductsAndCategories() {
     if (categoryForm) {
         categoryForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const submitBtn = categoryForm.querySelector('button[type="submit"]');
-            const originalText = submitBtn?.innerHTML || 'حفظ القسم';
-            const editId = document.getElementById('cat-edit-id')?.value;
-            const name = document.getElementById('cat-name')?.value?.trim();
-            const desc = document.getElementById('cat-desc')?.value?.trim();
-            const imageUrl = catImageUrl?.value?.trim() || null;
-            if (!name) return alert('اكتب اسم القسم أولاً.');
-            if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'جاري الحفظ...'; }
-            try {
-                const payload = { name, desc, image_url: imageUrl };
-                if (editId) await sb_update('categories', editId, payload);
-                else await sb_insert('categories', payload);
-                const imageCleanup = await cleanReplacedCategoryImage(originalCategoryImageUrl, imageUrl);
-                uploadedCategoryImageUrl = '';
-                categoryModal.classList.add('hidden');
-                if (imageCleanup.failed) alert('تم حفظ القسم، لكن تعذر حذف الصورة القديمة من التخزين.');
-                await refreshDashboardData();
-            } catch (error) {
-                alert('تعذر حفظ القسم: ' + readableError(error, 'راجع البيانات وحاول مرة أخرى.'));
-                console.error('[category save]', error);
-            } finally {
-                if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = originalText; }
+            const editId = document.getElementById('cat-edit-id').value;
+            const name = document.getElementById('cat-name').value;
+            const desc = document.getElementById('cat-desc').value;
+
+            if (editId) {
+                await sb_update('categories', editId, {name, desc});
+            } else {
+                await sb_insert('categories', {name, desc});
             }
+
+            sampleCategories = await sb_fetch('categories') || [];
+            renderCategories(sampleCategories);
+            populateCategoryDropdowns();
+            categoryModal.classList.add('hidden');
         });
     }
 }
@@ -1389,89 +604,89 @@ async function initProductsAndCategories() {
 function populateCategoryDropdowns() {
     const select = document.getElementById('p-category-select');
     if (!select) return;
-    select.multiple = true;
-    select.innerHTML = sampleCategories.map(c => `<option value="${safeText(c.name)}" data-id="${Number(c.id)}">${safeText(c.name)}</option>`).join('');
+    select.innerHTML = sampleCategories.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
 }
 
 function renderProducts(products) {
     const container = document.getElementById('products-cards-container');
     if (!container) return;
+
     if (!products || products.length === 0) {
-        container.innerHTML = `<div class="glass-panel p-4 text-center text-subtle w-full" style="grid-column:1/-1">لا توجد منتجات مضافة حتى الآن.</div>`;
+        container.innerHTML = `<div class="glass-panel p-4 text-center text-subtle w-full" style="grid-column: 1 / -1;">لا توجد منتجات مضافة حتى الآن. اضغط على زر "إضافة منتج جديد" للبدء.</div>`;
         return;
     }
+
     container.innerHTML = products.map(p => {
         const isLowStock = p.stock <= (p.stockThreshold || 5);
-        const mainImg = p.images?.find(i => i?.main)?.url || p.images?.[0]?.url || '';
-        const thumbHtml = mainImg ? `<img src="${safeText(mainImg)}" alt="${safeText(p.name)}" style="width:100%;height:100%;object-fit:cover;border-radius:8px;">` : `<i class="fa-solid fa-box-open" style="font-size:2rem;color:var(--text-subtle)"></i>`;
-        const sale = Number(p.salePrice) > 0 && Number(p.salePrice) < Number(p.price) ? Number(p.salePrice) : null;
-        const archiveAction = p.is_archived
-            ? (window.ADMIN_SESSION?.owner === true ? `<button class="btn btn-primary btn-sm" onclick="restoreProduct(${Number(p.id)})"><i class="fa-solid fa-rotate-left"></i> استرجاع</button>` : '')
-            : (can('products.delete') ? `<button class="btn btn-danger-ghost btn-sm" onclick="archiveProduct(${Number(p.id)})"><i class="fa-solid fa-box-archive"></i> أرشفة</button>` : '');
-        const archiveMeta = p.is_archived ? `<p class="text-danger text-sm mb-2"><strong>مؤرشف:</strong> ${safeText(p.archive_reason || 'بدون سبب مسجل')} ${p.archived_by ? ` · بواسطة ${safeText(p.archived_by)}` : ''}</p>` : '';
-        const permanentDeleteAction = p.is_archived && window.ADMIN_SESSION?.owner === true ? `<button class="btn btn-danger btn-sm" onclick="deleteProductPermanently(${Number(p.id)})"><i class="fa-solid fa-trash-can"></i> حذف نهائي</button>` : '';
-        return `<div class="product-card${p.is_active === false || p.is_archived ? ' opacity-50' : ''}">
-            <div class="product-thumb-container" style="position:relative;background:#f1f5f2;border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center;min-height:120px;">${thumbHtml}
-                <div class="badge-overlay-container" style="position:absolute;top:6px;right:6px;display:flex;flex-direction:column;gap:4px;">
-                    ${p.is_archived ? '<span class="badge" style="background:#7f1d1d;color:#fff;">مؤرشف</span>' : (!p.is_active ? '<span class="badge" style="background:#ef4444;color:#fff;">مخفي</span>' : '')}
-                    ${p.bestseller ? '<span class="badge badge-resolved">الأكثر مبيعاً</span>' : ''}
-                    ${isLowStock ? `<span class="badge badge-new"><i class="fa-solid fa-triangle-exclamation"></i> (${p.stock})</span>` : ''}
+        const mainImg  = p.images?.find(i => i?.main)?.url || p.images?.[0]?.url || '';
+        const thumbHtml = mainImg
+            ? `<img src="${mainImg}" alt="${p.name}" style="width:100%;height:100%;object-fit:cover;border-radius:8px;">`
+            : `<i class="fa-solid fa-box-open" style="font-size:2rem;color:var(--text-subtle)"></i>`;
+
+        return `
+            <div class="product-card${p.is_active === false ? ' opacity-50' : ''}">
+                <div class="product-thumb-container" style="position:relative;background:#f1f5f2;border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center;min-height:120px;">
+                    ${thumbHtml}
+                    <div class="badge-overlay-container" style="position:absolute;top:6px;right:6px;display:flex;flex-direction:column;gap:4px;">
+                        ${!p.is_active ? '<span class="badge" style="background:#ef4444;color:#fff;">مخفي</span>' : ''}
+                        ${p.bestseller ? '<span class="badge badge-resolved">الأكثر مبيعاً</span>' : ''}
+                        ${isLowStock ? '<span class="badge badge-new"><i class="fa-solid fa-triangle-exclamation"></i> (' + p.stock + ')</span>' : ''}
+                    </div>
+                </div>
+                <div class="product-card-body">
+                    <span class="text-subtle text-sm block mb-1">${p.category}</span>
+                    <strong class="text-primary font-bold text-lg mb-1">${p.name}</strong>
+                    <span class="text-subtle text-sm mb-2">SKU: ${p.sku || '—'} | بوسطة: ${p.bostaSize || 0} ج</span>
+                    ${p.sizes?.length ? `<span class="text-subtle text-sm mb-2">المقاسات: ${p.sizes.join('، ')}</span>` : ''}
+                    <p class="text-subtle text-sm mb-3" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${p.desc || ''}</p>
+                    <div class="flex-between mt-auto">
+                        <div>
+                            <strong class="text-primary text-lg">${p.salePrice ? p.salePrice : p.price} ج.م</strong>
+                            ${p.salePrice ? `<span class="text-subtle text-sm" style="text-decoration:line-through;">${p.price} ج</span>` : ''}
+                        </div>
+                        <span class="text-sm font-bold ${isLowStock ? 'text-danger' : 'text-emerald'}">${p.stock} قطعة</span>
+                    </div>
+                    <div class="product-card-actions">
+                        <button class="btn btn-ghost btn-sm" onclick="editProduct(${p.id})"><i class="fa-solid fa-pen"></i> تعديل</button>
+                        <button class="btn btn-ghost btn-sm" title="${p.is_active ? 'إخفاء' : 'إظهار'}" onclick="toggleProductVisibility(${p.id}, ${!p.is_active})">
+                            <i class="fa-solid ${p.is_active ? 'fa-eye-slash' : 'fa-eye'}"></i>
+                        </button>
+                        <button class="btn btn-danger-ghost btn-sm" onclick="deleteProduct(${p.id})"><i class="fa-solid fa-trash"></i></button>
+                    </div>
                 </div>
             </div>
-            <div class="product-card-body"><span class="text-subtle text-sm block mb-1">${safeText(p.category)}</span><strong class="text-primary font-bold text-lg mb-1">${safeText(p.name)}</strong>
-                <span class="text-subtle text-sm mb-2">SKU: ${safeText(p.sku || '—')} | بوسطة: ${Number(p.bostaSize || 0)} ج</span>
-                <p class="text-subtle text-sm mb-3" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${safeText(p.desc || '')}</p>${archiveMeta}
-                <div class="flex-between mt-auto"><div><strong class="text-primary text-lg">${sale ?? Number(p.price || 0)} ج.م</strong>${sale ? `<span class="text-subtle text-sm" style="text-decoration:line-through;">${Number(p.price)} ج</span>` : ''}</div><span class="text-sm font-bold ${isLowStock ? 'text-danger' : 'text-emerald'}">${Number(p.stock)} قطعة</span></div>
-                <div class="product-card-actions">${can('products.update') ? `<button class="btn btn-ghost btn-sm" onclick="editProduct(${Number(p.id)})"><i class="fa-solid fa-pen"></i> تعديل</button>` : ''}${can('products.update') && !p.is_archived ? `<button class="btn btn-ghost btn-sm" title="${p.is_active ? 'إخفاء' : 'إظهار'}" onclick="toggleProductVisibility(${Number(p.id)}, ${!p.is_active})"><i class="fa-solid ${p.is_active ? 'fa-eye-slash' : 'fa-eye'}"></i></button>` : ''}${archiveAction}${permanentDeleteAction}</div>
-            </div></div>`;
+        `;
     }).join('');
 }
 
 function renderCategories(categories) {
     const container = document.getElementById('categories-cards-container');
     if (!container) return;
-    if (!categories || categories.length === 0) { container.innerHTML = `<div class="glass-panel p-4 text-center text-subtle w-full" style="grid-column:1/-1">لا توجد أقسام مضافة حتى الآن.</div>`; return; }
-    container.innerHTML = categories.map(c => {
-        const image = c.image_url || 'assets/images/logo.png';
-        return `<div class="category-card glass-panel"><div class="category-card-main"><img class="category-card-thumb" src="${safeText(image)}" alt="${safeText(c.name)}" onerror="this.onerror=null;this.src='assets/images/logo.png'"><div><strong class="text-primary block font-bold text-lg">${safeText(c.name)}</strong><span class="text-subtle text-sm">${safeText(c.desc || c.description || '')}</span></div></div><div class="flex-align gap-2">${can('categories.update') ? `<button class="btn btn-ghost btn-sm" onclick="editCategory(${Number(c.id)})"><i class="fa-solid fa-pen"></i></button>` : ''}${can('categories.delete') ? `<button class="btn btn-danger-ghost btn-sm" onclick="deleteCategory(${Number(c.id)})"><i class="fa-solid fa-trash"></i></button>` : ''}</div></div>`;
-    }).join('');
+
+    if (!categories || categories.length === 0) {
+        container.innerHTML = `<div class="glass-panel p-4 text-center text-subtle w-full" style="grid-column: 1 / -1;">لا توجد أقسام مضافة حتى الآن. اضغط على زر "إضافة قسم جديد" للبدء.</div>`;
+        return;
+    }
+
+    container.innerHTML = categories.map(c => `
+        <div class="category-card glass-panel">
+            <div>
+                <strong class="text-primary block font-bold text-lg">${c.name}</strong>
+                <span class="text-subtle text-sm">${c.desc}</span>
+            </div>
+            <div class="flex-align gap-2">
+                <button class="btn btn-ghost btn-sm" onclick="editCategory(${c.id})"><i class="fa-solid fa-pen"></i></button>
+                <button class="btn btn-danger-ghost btn-sm" onclick="deleteCategory(${c.id})"><i class="fa-solid fa-trash"></i></button>
+            </div>
+        </div>
+    `).join('');
 }
 
 // 6 Image Slots Uploader State & Logic
 let currentEditingImages = [];
-let originalEditingImages = [];
-let uploadedEditingImageUrls = new Set();
-let originalCategoryImageUrl = '';
-let uploadedCategoryImageUrl = '';
 
-function managedImageUrl(url) {
-    const value = String(url || '').trim();
-    return value && Supabase.url && value.startsWith(`${Supabase.url}/storage/v1/object/public/public-assets/`) ? value : '';
-}
-
-async function cleanReplacedImages(previousImages, nextImages) {
-    const nextUrls = new Set((Array.isArray(nextImages) ? nextImages : []).map(img => managedImageUrl(img?.url)).filter(Boolean));
-    const oldUrls = new Set((Array.isArray(previousImages) ? previousImages : []).map(img => managedImageUrl(img?.url)).filter(Boolean));
-    const urls = [...oldUrls].filter(url => !nextUrls.has(url));
-    if (!urls.length || typeof Supabase.removeStorageFile !== 'function') return { deleted: 0, failed: 0 };
-    const results = await Promise.allSettled(urls.map(url => Supabase.removeStorageFile(url)));
-    return { deleted: results.filter(result => result.status === 'fulfilled').length, failed: results.filter(result => result.status === 'rejected').length };
-}
-
-async function cleanReplacedCategoryImage(previousUrl, nextUrl) {
-    const oldUrl = managedImageUrl(previousUrl);
-    const newUrl = managedImageUrl(nextUrl);
-    if (!oldUrl || oldUrl === newUrl || typeof Supabase.removeStorageFile !== 'function') return { deleted: 0, failed: 0 };
-    try { await Supabase.removeStorageFile(oldUrl); return { deleted: 1, failed: 0 }; }
-    catch (_) { return { deleted: 0, failed: 1 }; }
-}
-
-function renderGalleryUploaderSlots(existingImages, captureOriginal = false) {
-    currentEditingImages = (existingImages || []).filter(img => img && img.url).map(img => ({ url: String(img.url), main: img.main === true }));
-    if (captureOriginal) {
-        originalEditingImages = currentEditingImages.map(img => ({ ...img }));
-        uploadedEditingImageUrls = new Set();
-    }
+function renderGalleryUploaderSlots(existingImages) {
+    currentEditingImages = (existingImages || []).filter(img => img && img.url);
     const galleryContainer = document.getElementById('product-images-gallery');
     if (!galleryContainer) return;
 
@@ -1509,11 +724,9 @@ window.handleImageSlotUpload = async function(event, index) {
         let isMain = false;
         if (currentEditingImages.length === 0) isMain = true;
         currentEditingImages.push({ url, main: isMain });
-        uploadedEditingImageUrls.add(url);
         renderGalleryUploaderSlots(currentEditingImages);
     } catch (e) {
-        alert('تعذر رفع الصورة: ' + readableError(e, 'تحقق من نوع وحجم الصورة وصلاحيات الحساب.'));
-        console.error('[image upload]', e);
+        alert("Upload failed.");
     }
 };
 
@@ -1525,12 +738,8 @@ window.setMainImageSlot = function(index) {
 };
 
 window.removeImageSlot = function(index) {
-    const removed = currentEditingImages.splice(index, 1)[0];
+    currentEditingImages.splice(index, 1);
     renderGalleryUploaderSlots(currentEditingImages);
-    if (removed?.url && uploadedEditingImageUrls.has(removed.url)) {
-        uploadedEditingImageUrls.delete(removed.url);
-        Supabase.removeStorageFile(removed.url).catch(error => console.warn('[image cleanup]', error.message));
-    }
 };
 
 window.editProduct = function(id) {
@@ -1546,48 +755,23 @@ window.editProduct = function(id) {
     document.getElementById('p-stock').value = prod.stock;
     document.getElementById('p-stock-threshold').value = prod.stockThreshold || 5;
     document.getElementById('p-bosta-size').value = prod.bostaSize;
-    const categorySelect = document.getElementById('p-category-select');
-    Array.from(categorySelect?.options || []).forEach(option => { option.selected = (prod.category_ids || []).map(Number).includes(Number(option.dataset.id)) || (!(prod.category_ids || []).length && option.value === prod.category); });
+    document.getElementById('p-category-select').value = prod.category;
     document.getElementById('p-tag-bestseller').checked = prod.bestseller;
     document.getElementById('p-desc').value = prod.desc;
 
-    renderGalleryUploaderSlots(prod.images || [], true);
+    renderGalleryUploaderSlots(prod.images || []);
 
     document.getElementById('product-modal-title').textContent = 'تعديل المنتج';
     document.getElementById('product-modal').classList.remove('hidden');
 };
 
-async function archiveEntity(action, id, label) {
-    const reason = window.prompt(`اكتب سبب ${label} (إجباري، 5 أحرف على الأقل):`, 'لم يعد متاحاً للبيع');
-    if (reason === null) return;
-    if (reason.trim().length < 5) return alert('السبب إجباري ولا يقل عن 5 أحرف.');
+window.deleteProduct = async function(id) {
+    if (!confirm('هل أنت متأكد من حذف هذا المنتج نهائياً؟')) return;
     try {
-        const response = await window.adminFetch(`/api/admin?action=${action}&id=${encodeURIComponent(id)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, reason: reason.trim() }) });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.error || `تعذر ${label}`);
-        await refreshDashboardData();
-        alert(`تم ${label} بنجاح.`);
-    } catch (e) {
-        alert(readableError(e, `تعذر ${label} حالياً.`));
-        console.error(`[${action}]`, e);
-    }
-}
-
-window.archiveProduct = id => archiveEntity('archive_product', id, 'أرشفة المنتج ومراجعة الشحنات المرتبطة');
-window.restoreProduct = id => window.ADMIN_SESSION?.owner === true ? archiveEntity('restore_product', id, 'استرجاع المنتج') : alert('استرجاع الأرشيف متاح للمالك فقط.');
-window.deleteProductPermanently = async function(id) {
-    if (window.ADMIN_SESSION?.owner !== true) return alert('الحذف النهائي متاح للمالك فقط.');
-    if (!window.confirm('تحذير: سيتم حذف المنتج نهائياً من قاعدة البيانات ولا يمكن استرجاعه. هل تريد المتابعة؟')) return;
-    try {
-        const response = await window.adminFetch(`/api/admin?action=delete_product_permanent&id=${encodeURIComponent(id)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.error || 'تعذر الحذف النهائي للمنتج');
-        await refreshDashboardData();
-        alert('تم حذف المنتج نهائياً.');
-    } catch (error) {
-        alert(readableError(error, 'تعذر الحذف النهائي للمنتج حالياً.'));
-        console.error('[delete-product-permanent]', error);
-    }
+        await sb_delete('products', id);
+        sampleProducts = await sb_fetch('products') || [];
+        renderProducts(sampleProducts);
+    } catch(e) { alert('خطأ في الحذف: ' + e.message); }
 };
 
 window.toggleProductVisibility = async function(id, newActive) {
@@ -1605,16 +789,6 @@ window.editCategory = function(id) {
     document.getElementById('cat-edit-id').value = cat.id;
     document.getElementById('cat-name').value = cat.name;
     document.getElementById('cat-desc').value = cat.desc;
-    const imageUrl = document.getElementById('cat-image-url');
-    const imagePreview = document.getElementById('cat-image-preview');
-    const imageWrap = document.getElementById('cat-image-preview-wrap');
-    originalCategoryImageUrl = cat.image_url || '';
-    uploadedCategoryImageUrl = '';
-    if (imageUrl) imageUrl.value = cat.image_url || '';
-    if (imagePreview) imagePreview.src = cat.image_url || 'assets/images/logo.png';
-    if (imageWrap) imageWrap.hidden = !cat.image_url;
-    const imageFile = document.getElementById('cat-image-file');
-    if (imageFile) imageFile.value = '';
 
     document.getElementById('cat-modal-title').textContent = 'تعديل القسم';
     document.getElementById('category-modal').classList.remove('hidden');
@@ -1623,9 +797,7 @@ window.editCategory = function(id) {
 window.deleteCategory = async function(id) {
     if (!confirm('هل أنت متأكد من حذف هذا القسم؟')) return;
     try {
-        const category = sampleCategories.find(item => String(item.id) === String(id));
         await sb_delete('categories', id);
-        if (category?.image_url) await cleanReplacedCategoryImage(category.image_url, '').catch(error => console.warn('[category delete image cleanup]', error.message));
         sampleCategories = await sb_fetch('categories') || [];
         renderCategories(sampleCategories);
         populateCategoryDropdowns();
@@ -1647,37 +819,19 @@ async function initComplaintsSystem() {
     const filterAll = document.getElementById('filter-complaints-all');
     const filterNew = document.getElementById('filter-complaints-new');
     const filterResolved = document.getElementById('filter-complaints-resolved');
-    const filterArchived = document.getElementById('filter-complaints-archived');
-
-    const refreshComplaints = (filterFn) => {
-        const filtered = sampleComplaints.filter(c => {
-            const isArchived = c.is_archived === true;
-            if (filterFn === 'archived') return isArchived;
-            return !isArchived && (filterFn === 'all' || c.status === filterFn);
-        });
-        renderComplaints(filtered);
-    };
 
     if (filterAll) filterAll.addEventListener('click', () => {
         setComplaintFilterActive(filterAll);
-        refreshComplaints('all');
+        renderComplaints(sampleComplaints);
     });
     if (filterNew) filterNew.addEventListener('click', () => {
         setComplaintFilterActive(filterNew);
-        refreshComplaints('new');
+        renderComplaints(sampleComplaints.filter(c => c.status === 'new'));
     });
     if (filterResolved) filterResolved.addEventListener('click', () => {
         setComplaintFilterActive(filterResolved);
-        refreshComplaints('resolved');
+        renderComplaints(sampleComplaints.filter(c => c.status === 'resolved'));
     });
-    if (filterArchived) {
-        filterArchived.hidden = (window.ADMIN_SESSION?.owner !== true);
-        filterArchived.addEventListener('click', () => {
-            setComplaintFilterActive(filterArchived);
-            refreshComplaints('archived');
-        });
-    }
-    refreshComplaints('all');
 
     // Mark as Resolved inside Modal
     const resolveBtn = document.getElementById('resolve-complaint-btn');
@@ -1702,14 +856,14 @@ async function initComplaintsSystem() {
             const phoneVal = document.getElementById('modal-c-phone').value;
             if (phoneVal) {
                 const cleanPhone = phoneVal.replace(/[^0-9]/g, '');
-                window.open(`https://wa.me/2${cleanPhone}?text=${encodeURIComponent('أهلاً بك من خدمة عملاء أولاد القاضي، رداً على استفسارك...')}`, '_blank');
+                window.open(`https://wa.me/2${cleanPhone}?text=${encodeURIComponent('أهلاً بك من خدمة عملاء أولاد القاضي، رداً على استفسارك...')}`, '_blank', 'noopener,noreferrer');
             }
         });
     }
 }
 
 function setComplaintFilterActive(activeBtn) {
-    ['filter-complaints-all', 'filter-complaints-new', 'filter-complaints-resolved', 'filter-complaints-archived'].forEach(id => {
+    ['filter-complaints-all', 'filter-complaints-new', 'filter-complaints-resolved'].forEach(id => {
         const btn = document.getElementById(id);
         if (btn) btn.classList.remove('active-filter');
     });
@@ -1725,29 +879,21 @@ function renderComplaints(complaints) {
         return;
     }
 
-    container.innerHTML = complaints.map(c => {
-        const archiveAction = c.is_archived
-            ? (window.ADMIN_SESSION?.owner === true ? `<button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); restoreComplaint(${Number(c.id)})"><i class="fa-solid fa-rotate-left"></i> استرجاع</button>` : '')
-            : (can('complaints.delete') ? `<button class="btn btn-danger-ghost btn-sm" onclick="event.stopPropagation(); archiveComplaint(${Number(c.id)})"><i class="fa-solid fa-box-archive"></i> أرشفة</button>` : '');
-        const archiveMeta = c.is_archived ? `<p class="text-danger text-sm mt-2"><strong>مؤرشفة:</strong> ${safeText(c.archive_reason || 'بدون سبب مسجل')} ${c.archived_by ? ` · بواسطة ${safeText(c.archived_by)}` : ''}</p>` : '';
-        return `<div class="complaint-card glass-panel${c.is_archived ? ' opacity-50' : ''}" onclick="openComplaintModal(${Number(c.id)})">
+    container.innerHTML = complaints.map(c => `
+        <div class="complaint-card glass-panel" onclick="openComplaintModal(${c.id})">
             <div class="flex-between">
-                <strong class="text-primary font-bold text-lg">${safeText(c.client)}</strong>
-                <span class="badge ${c.is_archived ? 'badge-process' : (c.status === 'new' ? 'badge-new' : 'badge-resolved')}">${c.is_archived ? 'مؤرشفة' : (c.status === 'new' ? 'جديد (معلق)' : 'تم الحل')}</span>
+                <strong class="text-primary font-bold text-lg">${c.client}</strong>
+                <span class="badge ${c.status === 'new' ? 'badge-new' : 'badge-resolved'}">${c.status === 'new' ? 'جديد (معلق)' : 'تم الحل'}</span>
             </div>
-            <span class="text-subtle text-sm">${safeText(c.date)}</span>
-            <p class="text-subtle text-sm mt-1" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${safeText(c.text)}</p>${archiveMeta}
+            <span class="text-subtle text-sm">${c.date}</span>
+            <p class="text-subtle text-sm mt-1" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${c.text}</p>
             <div class="flex-between mt-2 pt-2 border-b">
                 <span class="text-primary font-bold text-sm">عرض التفاصيل <i class="fa-solid fa-arrow-left"></i></span>
-                <span class="text-subtle text-sm" dir="ltr">${safeText(c.phone)}</span>
+                <span class="text-subtle text-sm" dir="ltr">${c.phone}</span>
             </div>
-            ${archiveAction ? `<div class="flex-align gap-2 mt-2">${archiveAction}</div>` : ''}
-        </div>`;
-    }).join('');
+        </div>
+    `).join('');
 }
-
-window.archiveComplaint = id => archiveEntity('archive_complaint', id, 'أرشفة الشكوى');
-window.restoreComplaint = id => window.ADMIN_SESSION?.owner === true ? archiveEntity('restore_complaint', id, 'استرجاع الشكوى') : alert('استرجاع الأرشيف متاح للمالك فقط.');
 
 window.openComplaintModal = function(id) {
     const c = sampleComplaints.find(item => item.id === id);
@@ -1761,7 +907,7 @@ window.openComplaintModal = function(id) {
 
     const badgeEl = document.getElementById('modal-c-status-badge');
     if (badgeEl) {
-        badgeEl.innerHTML = `<span class="badge ${c.is_archived ? 'badge-process' : (c.status === 'new' ? 'badge-new' : 'badge-resolved')}">${c.is_archived ? 'مؤرشفة' : (c.status === 'new' ? 'جديد (معلق)' : 'تم الحل')}</span>`;
+        badgeEl.innerHTML = `<span class="badge ${c.status === 'new' ? 'badge-new' : 'badge-resolved'}">${c.status === 'new' ? 'جديد (معلق)' : 'تم الحل'}</span>`;
     }
 
     document.getElementById('complaint-modal').classList.remove('hidden');
@@ -1772,7 +918,6 @@ window.openComplaintModal = function(id) {
 // ==========================================
 let sampleSocials = [];
 let sampleFaqs = [];
-let siteSettingsId = 1;
 
 async function initSiteSettings() {
     sampleSocials = await sb_fetch('socials') || [];
@@ -1781,7 +926,6 @@ async function initSiteSettings() {
     const settingsArr = await sb_fetch('site_settings');
     if (settingsArr && settingsArr.length > 0) {
         const settings = settingsArr[0];
-        siteSettingsId = settings.id || 1;
 
         // Populating Identity
         if (settings.logo_header) {
@@ -1793,34 +937,17 @@ async function initSiteSettings() {
             document.getElementById('setting-logo-footer-preview').src = settings.logo_footer;
         }
 
-        // Populating all CMS fields without overwriting them with UI defaults.
-        const fields = {
-            'setting-site-name': settings.site_name, 'setting-brand-name': settings.brand_name, 'setting-seo-desc': settings.seo_description,
-            'setting-marquee-text': settings.marquee_text, 'setting-hero-title': settings.hero_title, 'setting-hero-subtitle': settings.hero_subtitle || settings.hero_description,
-            'setting-hero-tagline': settings.hero_tagline, 'setting-catalog-title': settings.catalog_title, 'setting-catalog-subtitle': settings.catalog_subtitle,
-            'setting-address': settings.address, 'setting-phone': settings.footer_phone || settings.phone, 'setting-whatsapp': settings.whatsapp_number, 'setting-bosta-package-type': settings.bosta_default_package_type || 'SMALL'
-        };
-        Object.entries(fields).forEach(([id, value]) => { const el = document.getElementById(id); if (el && value != null) el.value = value; });
-        applyTrustCardFields(settings.trust_cards);
-        applySectionVisibilityFields(settings.section_visibility);
+        // Populating Content
         if (settings.marquee_behavior) document.getElementById('setting-marquee-behavior').value = settings.marquee_behavior;
-        if (settings.marquee_end_date) document.getElementById('setting-marquee-end-date').value = settings.marquee_end_date.slice(0, 16);
+        if (settings.marquee_end_date) document.getElementById('setting-marquee-end-date').value = settings.marquee_end_date;
 
-        // Populating Toggles and maintenance schedule
-        const shippingToggle = document.getElementById('custom-shipping-master-toggle');
-        const maintenanceToggle = document.getElementById('maintenance-mode-toggle');
-        if (shippingToggle) shippingToggle.checked = settings.shipping_custom === true;
-        if (maintenanceToggle) maintenanceToggle.checked = settings.maintenance_mode === true;
-        const maintenanceEnd = document.getElementById('maintenance-end-at');
-        if (maintenanceEnd && settings.maintenance_end_at) {
-            const parsed = new Date(settings.maintenance_end_at);
-            if (!Number.isNaN(parsed.getTime())) {
-                const local = new Date(parsed.getTime() - parsed.getTimezoneOffset() * 60000);
-                maintenanceEnd.value = local.toISOString().slice(0, 16);
-            }
-        }
-        const maintenanceLogoPreview = document.getElementById('maintenance-preview-logo');
-        if (maintenanceLogoPreview && settings.logo_header) maintenanceLogoPreview.src = settings.logo_header;
+        // Populating Toggles
+        if (settings.shipping_custom) document.getElementById('custom-shipping-master-toggle').checked = true;
+        if (settings.maintenance_mode) document.getElementById('maintenance-mode-toggle').checked = true;
+        ['address', 'footer_phone', 'whatsapp_number', 'bosta_webhook', 'bosta_payment_type', 'bosta_default_size'].forEach(key => {
+            const field = document.getElementById({ address: 'setting-address', footer_phone: 'setting-footer-phone', whatsapp_number: 'setting-whatsapp', bosta_webhook: 'setting-bosta-webhook', bosta_payment_type: 'setting-bosta-payment', bosta_default_size: 'setting-bosta-size' }[key]);
+            if (field && settings[key] != null) field.value = settings[key];
+        });
     }
 
     renderSocialLinks();
@@ -1934,7 +1061,7 @@ async function initSiteSettings() {
                     await saveFn();
                     alert('تم حفظ البيانات بنجاح!');
                 } catch (err) {
-                    alert(err?.message || 'حدث خطأ أثناء الحفظ.');
+                    alert('حدث خطأ أثناء الحفظ.');
                     console.error(err);
                 } finally {
                     btn.disabled = false;
@@ -1945,7 +1072,7 @@ async function initSiteSettings() {
     };
 
     wrapSaveBtn('save-identity-btn', async () => {
-        await sb_update('site_settings', siteSettingsId, {
+        await sb_update('site_settings', 1, {
             logo_header: document.getElementById('setting-logo-header')?.value || null,
             logo_footer: document.getElementById('setting-logo-footer')?.value || null,
             site_name: document.getElementById('setting-site-name')?.value?.trim() || null,
@@ -1955,76 +1082,39 @@ async function initSiteSettings() {
     });
 
     wrapSaveBtn('save-content-btn', async () => {
-        await sb_update('site_settings', siteSettingsId, {
+        await sb_update('site_settings', 1, {
             marquee_text: document.getElementById('setting-marquee-text')?.value?.trim() || null,
             marquee_behavior: document.getElementById('setting-marquee-behavior')?.value || 'running',
             marquee_end_date: document.getElementById('setting-marquee-end-date')?.value || null,
-            hero_title: document.getElementById('setting-hero-title')?.value?.trim() || null,
-            hero_subtitle: document.getElementById('setting-hero-subtitle')?.value?.trim() || null,
-            hero_tagline: document.getElementById('setting-hero-tagline')?.value?.trim() || null,
-            catalog_title: document.getElementById('setting-catalog-title')?.value?.trim() || null,
-            catalog_subtitle: document.getElementById('setting-catalog-subtitle')?.value?.trim() || null,
-            trust_cards: readTrustCardFields(),
-            section_visibility: readSectionVisibilityFields()
+            hero_title: document.getElementById('setting-hero-title')?.value?.trim() || null
         });
     });
 
     wrapSaveBtn('save-contact-btn', async () => {
-        const phone = document.getElementById('setting-phone')?.value?.trim() || null;
-        const whatsapp = document.getElementById('setting-whatsapp')?.value?.trim() || null;
-        if (phone && !/^01[0125]\d{8}$/.test(phone)) throw new Error('رقم الهاتف غير صحيح');
-        if (whatsapp && !/^01[0125]\d{8}$/.test(whatsapp)) throw new Error('رقم الواتساب غير صحيح');
-        await sb_update('site_settings', siteSettingsId, { address: document.getElementById('setting-address')?.value?.trim() || null, footer_phone: phone, whatsapp_number: whatsapp });
+        await sb_update('site_settings', 1, {
+            address: document.getElementById('setting-address')?.value?.trim() || null,
+            footer_phone: document.getElementById('setting-footer-phone')?.value?.trim() || null,
+            whatsapp_number: document.getElementById('setting-whatsapp')?.value?.trim() || null
+        });
     });
 
     wrapSaveBtn('save-shipping-setting-btn', async () => {
-        await sb_update('site_settings', siteSettingsId, {
+        await sb_update('site_settings', 1, {
+            bosta_webhook: document.getElementById('setting-bosta-webhook')?.value?.trim() || null,
+            bosta_payment_type: document.getElementById('setting-bosta-payment')?.value || 'cod',
+            bosta_default_size: Number(document.getElementById('setting-bosta-size')?.value) || 140,
             shipping_custom: document.getElementById('custom-shipping-master-toggle')?.checked || false,
             shipping_type: document.getElementById('custom-shipping-type')?.value || 'flat',
             shipping_flat_rate: Number(document.getElementById('custom-shipping-flat-rate')?.value) || 0
         });
     });
 
-    wrapSaveBtn('save-bosta-setting-btn', async () => {
-        const packageType = document.getElementById('setting-bosta-package-type')?.value || 'SMALL';
-        if (!['SMALL', 'MEDIUM', 'LARGE', 'Light Bulky', 'Heavy Bulky'].includes(packageType)) throw new Error('حجم شحنة غير صحيح');
-        await sb_update('site_settings', siteSettingsId, { bosta_default_package_type: packageType });
-    });
-
     wrapSaveBtn('save-maintenance-btn', async () => {
-        const enabled = document.getElementById('maintenance-mode-toggle')?.checked || false;
-        const message = document.getElementById('maintenance-message')?.value?.trim() || null;
-        const rawEndAt = document.getElementById('maintenance-end-at')?.value || '';
-        const endAt = rawEndAt ? new Date(rawEndAt) : null;
-        if (enabled && (!endAt || Number.isNaN(endAt.getTime()) || endAt.getTime() <= Date.now())) {
-            throw new Error('لازم تحدد موعد رجوع صحيح وفي المستقبل قبل تفعيل وضع الصيانة.');
-        }
-        if (enabled && !message) throw new Error('اكتب رسالة للزوار قبل تفعيل وضع الصيانة.');
-        await sb_update('site_settings', siteSettingsId, {
-            maintenance_mode: enabled,
-            maintenance_message: message,
-            maintenance_end_at: endAt ? endAt.toISOString() : null
+        await sb_update('site_settings', 1, {
+            maintenance_mode: document.getElementById('maintenance-mode-toggle')?.checked || false,
+            maintenance_message: document.getElementById('maintenance-message')?.value?.trim() || null
         });
     });
-}
-
-function readTrustCardFields() {
-    return [1, 2, 3].map(index => ({ icon: document.getElementById(`trust-${index}-icon`)?.value?.trim() || '', title: document.getElementById(`trust-${index}-title`)?.value?.trim() || '', text: document.getElementById(`trust-${index}-text`)?.value?.trim() || '' })).filter(card => card.title || card.text);
-}
-function applyTrustCardFields(cards) {
-    const list = Array.isArray(cards) ? cards : [];
-    [1, 2, 3].forEach((index, offset) => {
-        const card = list[offset] || {};
-        const icon = document.getElementById(`trust-${index}-icon`); const title = document.getElementById(`trust-${index}-title`); const text = document.getElementById(`trust-${index}-text`);
-        if (icon) icon.value = card.icon || ''; if (title) title.value = card.title || ''; if (text) text.value = card.text || '';
-    });
-}
-function readSectionVisibilityFields() {
-    return { trust: document.getElementById('show-trust')?.checked !== false, products: document.getElementById('show-products')?.checked !== false, faq: document.getElementById('show-faq')?.checked !== false, testimonials: document.getElementById('show-testimonials')?.checked !== false };
-}
-function applySectionVisibilityFields(value) {
-    const visibility = value && typeof value === 'object' ? value : {};
-    [['show-trust', 'trust'], ['show-products', 'products'], ['show-faq', 'faq'], ['show-testimonials', 'testimonials']].forEach(([id, key]) => { const el = document.getElementById(id); if (el && visibility[key] !== undefined) el.checked = visibility[key] !== false; });
 }
 
 function renderSocialLinks() {
@@ -2033,9 +1123,22 @@ function renderSocialLinks() {
 
     list.innerHTML = sampleSocials.map(s => `
         <div class="card-item flex-between">
-            <div class="flex-align gap-3"><i class="${safeText(s.icon || 'fa-solid fa-link')} text-primary text-lg"></i><div><strong class="text-dark block">${safeText(s.name)}</strong><span class="text-subtle text-sm">${safeText(s.link)}</span></div></div>
-            <div class="flex-align gap-3">${canAny(['landing.edit_contact', 'landing.edit']) ? `<label class="switch-toggle" title="إظهار/إخفاء"><input type="checkbox" ${s.visible ? 'checked' : ''} onchange="toggleSocialVisible(${Number(s.id)})"><span class="slider"></span></label><button class="btn btn-ghost btn-sm" onclick="editSocial(${Number(s.id)})"><i class="fa-solid fa-pen"></i></button><button class="btn btn-danger-ghost btn-sm" onclick="deleteSocial(${Number(s.id)})"><i class="fa-solid fa-trash"></i></button>` : ''}</div>
-        </div>`).join('');
+            <div class="flex-align gap-3">
+                <i class="${s.icon} text-primary text-lg"></i>
+                <div>
+                    <strong class="text-dark block">${s.name}</strong>
+                    <span class="text-subtle text-sm">${s.link}</span>
+                </div>
+            </div>
+            <div class="flex-align gap-3">
+                <label class="switch-toggle" title="إظهار/إخفاء">
+                    <input type="checkbox" ${s.visible ? 'checked' : ''} onchange="toggleSocialVisible(${s.id})">
+                    <span class="slider"></span>
+                </label>
+                <button class="btn btn-danger-ghost btn-sm" onclick="deleteSocial(${s.id})"><i class="fa-solid fa-trash"></i></button>
+            </div>
+        </div>
+    `).join('');
 }
 
 function renderFaqs() {
@@ -2043,24 +1146,30 @@ function renderFaqs() {
     if (!list) return;
 
     list.innerHTML = sampleFaqs.map(f => `
-        <div class="card-item flex-between"><div class="flex-1"><strong class="text-primary block font-bold mb-1"><i class="fa-solid fa-question-circle"></i> ${safeText(f.q)}</strong><p class="text-subtle text-sm">${safeText(f.a)}</p></div>
-            <div class="flex-align gap-3">${canAny(['landing.edit_faq', 'landing.edit']) ? `<label class="switch-toggle" title="تفعيل/إخفاء السؤال"><input type="checkbox" ${f.visible ? 'checked' : ''} onchange="toggleFaqVisible(${Number(f.id)})"><span class="slider"></span></label><button class="btn btn-ghost btn-sm" onclick="editFaq(${Number(f.id)})"><i class="fa-solid fa-pen"></i></button><button class="btn btn-danger-ghost btn-sm" onclick="deleteFaq(${Number(f.id)})"><i class="fa-solid fa-trash"></i></button>` : ''}</div>
-        </div>`).join('');
+        <div class="card-item flex-between">
+            <div class="flex-1">
+                <strong class="text-primary block font-bold mb-1"><i class="fa-solid fa-question-circle"></i> ${f.q}</strong>
+                <p class="text-subtle text-sm">${f.a}</p>
+            </div>
+            <div class="flex-align gap-3">
+                <label class="switch-toggle" title="تفعيل/إخفاء السؤال">
+                    <input type="checkbox" ${f.visible ? 'checked' : ''} onchange="toggleFaqVisible(${f.id})">
+                    <span class="slider"></span>
+                </label>
+                <button class="btn btn-danger-ghost btn-sm" onclick="deleteFaq(${f.id})"><i class="fa-solid fa-trash"></i></button>
+            </div>
+        </div>
+    `).join('');
 }
 
 window.toggleSocialVisible = async function(id) {
     const item = sampleSocials.find(s => s.id === id);
-    if (!item) return;
-    const next = !item.visible;
-    try { await sb_update('socials', id, { visible: next }); item.visible = next; }
-    catch(e) { alert('خطأ في التحديث: ' + e.message); }
-};
-window.editSocial = async function(id) {
-    const item = sampleSocials.find(s => s.id === id); if (!item) return;
-    const name = prompt('اسم القناة:', item.name); if (!name) return;
-    const link = prompt('الرابط الكامل:', item.link); if (!link || !ADMIN_ALLOWED_SOCIAL_SCHEMES.test(link) || link.includes('#')) return alert('الرابط غير مسموح');
-    try { await sb_update('socials', id, { name: name.trim(), link: link.trim() }); sampleSocials = await sb_fetch('socials') || []; renderSocialLinks(); }
-    catch(e) { alert('خطأ في تعديل القناة: ' + e.message); }
+    if (item) {
+        item.visible = !item.visible;
+        try {
+            await sb_update('socials', id, { visible: item.visible });
+        } catch(e) { alert('خطأ في التحديث'); }
+    }
 };
 window.deleteSocial = async function(id) {
     if(confirm('هل أنت متأكد؟')) {
@@ -2070,14 +1179,6 @@ window.deleteSocial = async function(id) {
             renderSocialLinks();
         } catch(e) { alert('خطأ في الحذف'); }
     }
-};
-
-window.editFaq = async function(id) {
-    const item = sampleFaqs.find(f => f.id === id); if (!item) return;
-    const q = prompt('السؤال:', item.q); if (!q) return;
-    const a = prompt('الإجابة:', item.a); if (!a) return;
-    try { await sb_update('faqs', id, { q: q.trim(), a: a.trim() }); sampleFaqs = await sb_fetch('faqs') || []; renderFaqs(); }
-    catch(e) { alert('خطأ في تعديل السؤال: ' + e.message); }
 };
 
 window.toggleFaqVisible = async function(id) {
@@ -2112,3 +1213,256 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
         if (e.target === overlay) overlay.classList.add('hidden');
     });
 });
+
+
+// ==========================================
+// BULK PRODUCT IMPORT / UPSERT
+// ==========================================
+const BULK_HEADERS = ['كود المنتج SKU', 'اسم المنتج', 'القسم', 'السعر', 'السعر قبل الخصم', 'الكمية', 'المقاسات', 'اسم ملف الصورة', 'الوصف'];
+
+function setBulkStatus(message, isError = false) {
+    const status = document.getElementById('bulk-import-status');
+    if (status) {
+        status.textContent = message;
+        status.classList.toggle('text-danger', isError);
+    }
+}
+
+function normalizeFileName(name) {
+    return String(name || '').trim().toLowerCase().replace(/\\/g, '/').split('/').pop();
+}
+
+function parseBulkNumber(value, fallback = 0) {
+    const number = Number(String(value ?? '').replace(/,/g, '').trim());
+    return Number.isFinite(number) ? number : fallback;
+}
+
+function parseBulkSizes(value) {
+    return String(value ?? '').split(/[,،]/).map(item => sanitizeFormValue(item, 100)).filter(Boolean);
+}
+
+function generateAutoSku(rowNumber) {
+    const timestamp = Date.now().toString(36).toUpperCase();
+    const random = Math.random().toString(36).slice(2, 7).toUpperCase();
+    return `AUTO-${timestamp}-${rowNumber}-${random}`;
+}
+
+function downloadBulkTemplate() {
+    if (typeof XLSX === 'undefined') {
+        setBulkStatus('مكتبة Excel لسه بتتحمل، جرّب تاني بعد لحظات.', true);
+        return;
+    }
+    const sheet = XLSX.utils.aoa_to_sheet([BULK_HEADERS]);
+    sheet['!cols'] = BULK_HEADERS.map(() => ({ wch: 22 }));
+    const book = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(book, sheet, 'Products');
+    XLSX.writeFile(book, 'products_bulk_template.xlsx');
+}
+
+async function readBulkRows(file) {
+    const buffer = await file.arrayBuffer();
+    const workbook = XLSX.read(buffer, { type: 'array' });
+    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1, defval: '' });
+    const headers = (rows.shift() || []).map(value => String(value).trim());
+    const indexes = Object.fromEntries(BULK_HEADERS.map(header => [header, headers.indexOf(header)]));
+    const missing = BULK_HEADERS.filter(header => indexes[header] < 0);
+    if (missing.length) throw new Error(`الأعمدة الناقصة: ${missing.join('، ')}`);
+    return rows.map((row, index) => ({
+        rowNumber: index + 2,
+        sku: sanitizeFormValue(row[indexes['كود المنتج SKU']], 120),
+        name: sanitizeFormValue(row[indexes['اسم المنتج']], 300),
+        category: sanitizeFormValue(row[indexes['القسم']], 150),
+        price: parseBulkNumber(row[indexes['السعر']]),
+        salePrice: parseBulkNumber(row[indexes['السعر قبل الخصم']], 0),
+        stock: Math.max(0, Math.floor(parseBulkNumber(row[indexes['الكمية']]))),
+        sizes: parseBulkSizes(row[indexes['المقاسات']]),
+        imageName: normalizeFileName(row[indexes['اسم ملف الصورة']]),
+        desc: sanitizeFormValue(row[indexes['الوصف']], 5000)
+    })).filter(row => row.sku || row.name);
+}
+
+async function importBulkProducts() {
+    const permissionResponse = await fetch('/api/admin/bulk-import', { credentials: 'include' });
+    if (!permissionResponse.ok) return setBulkStatus('الرفع المجمع متاح للأدمن فقط.', true);
+    const excelInput = document.getElementById('bulk-excel-file');
+    const imagesInput = document.getElementById('bulk-image-files');
+    const button = document.getElementById('start-bulk-import');
+    if (!excelInput?.files?.[0]) return setBulkStatus('اختار ملف Excel الأول.', true);
+    if (typeof XLSX === 'undefined') return setBulkStatus('مكتبة Excel لسه بتتحمل، جرّب تاني بعد لحظات.', true);
+
+    button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+    window.BULK_IMPORT_MODE = true;
+    setBulkStatus('جاري قراءة الملف وتجهيز الصور...');
+    try {
+        const rows = await readBulkRows(excelInput.files[0]);
+        const filesByName = new Map(Array.from(imagesInput?.files || []).map(file => [normalizeFileName(file.name), file]));
+        const existing = await sb_fetch('products') || [];
+        const bySku = new Map(existing.filter(product => product.sku).map(product => [String(product.sku).trim().toLowerCase(), product]));
+        let added = 0;
+        let updated = 0;
+        const warnings = [];
+
+        for (const row of rows) {
+            if (!row.name || row.price <= 0) {
+                warnings.push(`السطر ${row.rowNumber}: لازم اسم المنتج والسعر يكونوا صحيحين.`);
+                continue;
+            }
+            if (!row.sku) {
+                row.sku = generateAutoSku(row.rowNumber);
+                warnings.push(`السطر ${row.rowNumber}: تم إنشاء SKU تلقائي: ${row.sku}`);
+            }
+            const oldProduct = bySku.get(row.sku.toLowerCase());
+            let images = oldProduct?.images || [];
+            if (row.imageName) {
+                const imageFile = filesByName.get(row.imageName);
+                if (!imageFile) {
+                    warnings.push(`السطر ${row.rowNumber}: الصورة ${row.imageName} مش موجودة، تم الإبقاء على الصور القديمة.`);
+                } else {
+                    const imageUrl = await sb_upload(imageFile);
+                    images = [{ url: imageUrl, main: true }];
+                }
+            }
+            const product = {
+                name: row.name,
+                sku: row.sku,
+                price: row.price,
+                salePrice: row.salePrice > 0 ? row.salePrice : '',
+                stock: row.stock,
+                stockThreshold: oldProduct?.stockThreshold || 5,
+                bostaSize: oldProduct?.bostaSize || 0,
+                category: row.category || 'بدون قسم',
+                bestseller: oldProduct?.bestseller || false,
+                desc: row.desc,
+                sizes: row.sizes,
+                images
+            };
+            if (oldProduct) {
+                await sb_update('products', oldProduct.id, product);
+                updated++;
+            } else {
+                await sb_insert('products', product);
+                bySku.set(row.sku.toLowerCase(), { ...product, id: `pending-${row.rowNumber}` });
+                added++;
+            }
+        }
+        sampleProducts = await sb_fetch('products') || [];
+        renderProducts(sampleProducts);
+        const warningText = warnings.length ? `\nتنبيهات:\n${warnings.join('\n')}` : '';
+        setBulkStatus(`تم بنجاح: إضافة ${added} وتحديث ${updated}.${warningText}`);
+    } catch (error) {
+        console.error('[bulk-import]', error);
+        setBulkStatus(`فشل الرفع: ${error.message}`, true);
+    } finally {
+        window.BULK_IMPORT_MODE = false;
+        button.disabled = false;
+        button.removeAttribute('aria-busy');
+    }
+}
+
+function initBulkProductImport() {
+    document.getElementById('open-bulk-import')?.addEventListener('click', () => document.getElementById('bulk-import-panel')?.classList.remove('hidden'));
+    document.getElementById('close-bulk-import')?.addEventListener('click', () => document.getElementById('bulk-import-panel')?.classList.add('hidden'));
+    document.getElementById('download-products-template')?.addEventListener('click', downloadBulkTemplate);
+    document.getElementById('start-bulk-import')?.addEventListener('click', importBulkProducts);
+}
+
+
+// ==========================================
+// STAFF ACCOUNTS MANAGEMENT
+// ==========================================
+let staffAccounts = [];
+
+async function fetchStaffAccounts() {
+    const response = await fetch('/api/admin?table=staff_accounts&action=select&query=order=created_at.desc', { credentials: 'include' });
+    if (!response.ok) throw new Error('تعذر تحميل الموظفين');
+    return response.json();
+}
+
+function renderStaffAccounts() {
+    const list = document.getElementById('staff-list-container');
+    if (!list) return;
+    if (!staffAccounts.length) {
+        list.textContent = 'لا يوجد موظفون مضافون حتى الآن.';
+        return;
+    }
+    list.innerHTML = staffAccounts.map(staff => `
+        <div class="card-item flex-between">
+            <div>
+                <strong class="text-primary block">${sanitizeFormValue(staff.phone, 30)}</strong>
+                <span class="text-subtle text-sm">${sanitizeFormValue(staff.login_email, 160)}</span>
+                <span class="text-subtle text-sm block">${staff.is_active ? 'نشط' : 'موقوف'} · ${Array.isArray(staff.permissions) ? staff.permissions.join('، ') : ''}</span>
+            </div>
+            <div class="flex-align gap-2">
+                <button type="button" class="btn btn-ghost btn-sm" data-edit-staff="${staff.id}"><i class="fa-solid fa-pen"></i> تعديل</button>
+                <button type="button" class="btn btn-danger-ghost btn-sm" data-delete-staff="${staff.id}"><i class="fa-solid fa-trash"></i></button>
+            </div>
+        </div>`).join('');
+}
+
+function openStaffModal(staff = null) {
+    document.getElementById('staff-edit-id').value = staff?.id || '';
+    document.getElementById('staff-phone').value = staff?.phone || '';
+    document.getElementById('staff-email').value = staff?.login_email || '';
+    document.getElementById('staff-active').checked = staff?.is_active !== false;
+    const permissions = Array.isArray(staff?.permissions) ? staff.permissions : [];
+    document.querySelectorAll('#staff-permissions input[type="checkbox"]').forEach(input => { input.checked = permissions.includes(input.value); });
+    document.getElementById('staff-bulk-permission').value = permissions.includes('bulk_import') ? '1' : '';
+    document.getElementById('staff-modal-title').textContent = staff ? 'تعديل موظف' : 'إضافة موظف';
+    document.getElementById('staff-modal').classList.remove('hidden');
+}
+
+let staffAccountsInitialized = false;
+async function initStaffAccounts() {
+    if (staffAccountsInitialized) return;
+    staffAccountsInitialized = true;
+    const tab = document.getElementById('tab-staff');
+    if (!tab) return;
+    try {
+        staffAccounts = await fetchStaffAccounts();
+        renderStaffAccounts();
+    } catch (error) {
+        const status = document.getElementById('staff-status');
+        if (status) status.textContent = error.message;
+    }
+    document.getElementById('open-add-staff-btn')?.addEventListener('click', () => openStaffModal());
+    document.getElementById('staff-list-container')?.addEventListener('click', event => {
+        const edit = event.target.closest('[data-edit-staff]');
+        const remove = event.target.closest('[data-delete-staff]');
+        if (edit) openStaffModal(staffAccounts.find(item => String(item.id) === edit.dataset.editStaff));
+        if (remove) deleteStaffAccount(remove.dataset.deleteStaff);
+    });
+    document.getElementById('staff-form')?.addEventListener('submit', saveStaffAccount);
+}
+
+async function saveStaffAccount(event) {
+    event.preventDefault();
+    const id = document.getElementById('staff-edit-id').value;
+    const payload = {
+        phone: sanitizeFormValue(document.getElementById('staff-phone').value, 30),
+        login_email: sanitizeFormValue(document.getElementById('staff-email').value, 160),
+        permissions: [...document.querySelectorAll('#staff-permissions input[type="checkbox"]:checked')].map(input => input.value),
+        is_active: document.getElementById('staff-active').checked
+    };
+    if (!/^\+?[0-9]{7,20}$/.test(payload.phone) || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(payload.login_email)) {
+        document.getElementById('staff-status').textContent = 'راجع رقم الموظف والإيميل.';
+        return;
+    }
+    const query = id ? `&id=${encodeURIComponent(id)}` : '';
+    const response = await fetch(`/api/admin?table=staff_accounts&action=${id ? 'update' : 'insert'}${query}`, {
+        method: id ? 'PATCH' : 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+    });
+    if (!response.ok) throw new Error('تعذر حفظ بيانات الموظف');
+    staffAccounts = await fetchStaffAccounts();
+    renderStaffAccounts();
+    document.getElementById('staff-modal').classList.add('hidden');
+}
+
+async function deleteStaffAccount(id) {
+    if (!confirm('هل أنت متأكد من حذف الموظف؟')) return;
+    const response = await fetch(`/api/admin?table=staff_accounts&action=delete&id=${encodeURIComponent(id)}`, { method: 'DELETE', credentials: 'include' });
+    if (!response.ok) return;
+    staffAccounts = await fetchStaffAccounts();
+    renderStaffAccounts();
+}
+

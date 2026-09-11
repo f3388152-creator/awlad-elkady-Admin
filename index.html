@@ -4,13 +4,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="لوحة التحكم المركزية لإدارة معرض أولاد القاضي — إدارة الطلبات والمنتجات والأقسام والشكاوى والإعدادات.">
+    <meta name="robots" content="noindex, nofollow">
+    <link rel="canonical" href="https://admin.awladelkady.com/">
     <title>لوحة التحكم - أولاد القاضي</title>
+
+    <!-- Preconnect for performance -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+
     <!-- Cairo Font -->
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap"
-        rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer">
     <!-- SheetJS for Bosta Excel Export -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" integrity="sha512-r22gChDnGvBylk90+2e/ycr3RVrDi8DIOkIGNhJlKfuyQM4tIRAI062MaV8sfjQKYVGjOBaZBOA87z+IhZE9DA==" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
     <link rel="stylesheet" href="assets/css/admin.css">
 </head>
 
@@ -20,26 +28,26 @@
     <div id="login-screen" class="login-screen">
         <div class="login-card glass-panel">
             <div class="logo-wrapper">
-                <img src="/assets/images/logo.png" alt="أولاد القاضي" class="login-logo"
-                    onerror="this.outerHTML='<div class=\'fallback-logo\'><i class=\'fa-solid fa-crown text-primary\'></i><span>أولاد القاضي</span></div>'">
+                <img src="/assets/images/logo.png" alt="أولاد القاضي" class="login-logo">
             </div>
             <h2 class="login-title">بوابة الإدارة المركزية</h2>
             <p class="login-subtitle">سجّل الدخول بحساب الإدارة المصرّح به</p>
 
             <form id="login-form">
                 <div class="form-group mb-3">
-                    <div class="input-icon-wrapper" style="position: relative;">
-                        <i class="fa-solid fa-mobile-screen-button input-icon" style="position: absolute; right: 1rem; top: 50%; transform: translateY(-50%);"></i>
-                        <input type="tel" id="staff-phone-login" class="form-control text-center" inputmode="numeric" placeholder="رقم الموظف (اتركه فارغاً للمالك)" autocomplete="username" style="padding-right: 2.5rem;">
-                    </div>
+                    <label for="employee-phone" class="sr-only">رقم الموظف</label>
+                    <input type="tel" id="employee-phone" name="employee_phone" class="form-control text-center"
+                        placeholder="رقم الموظف (اتركه فاضي للمالك)" autocomplete="username" inputmode="numeric"
+                        aria-label="رقم الموظف، اتركه فارغًا لدخول المالك">
                 </div>
                 <div class="form-group mb-4">
+                    <label for="password-only" class="sr-only" aria-hidden="false" style="display:none;">كلمة المرور</label>
                     <div class="input-icon-wrapper" style="position: relative;">
                         <i class="fa-solid fa-lock input-icon"
                             style="position: absolute; right: 1rem; top: 50%; transform: translateY(-50%);"></i>
-                        <input type="password" id="password-only" class="form-control text-center"
+                        <input type="password" id="password-only" name="password" class="form-control text-center"
                             placeholder="كلمة المرور" autocomplete="current-password" autofocus required
-                            style="padding-left: 2.5rem;">
+                            style="padding-left: 2.5rem;" aria-label="كلمة المرور">
                         <button type="button" id="toggle-password"
                             style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: var(--clr-text-subtle);">
                             <i class="fa-solid fa-eye" id="toggle-password-icon"></i>
@@ -48,7 +56,7 @@
                 </div>
                 <button type="submit" class="btn btn-primary btn-block"><i class="fa-solid fa-right-to-bracket"></i>
                     دخول اللوحة</button>
-                <div id="login-error" class="error-text"></div>
+                <div id="login-error" class="error-text" role="alert" aria-live="assertive"></div>
             </form>
         </div>
     </div>
@@ -58,14 +66,10 @@
         <!-- Sidebar Navigation -->
         <aside class="sidebar glass-panel">
             <div class="sidebar-brand">
-                <img src="/assets/images/logo.png" alt="أولاد القاضي" class="brand-logo"
-                    onerror="this.outerHTML='<h3 class=\'brand-text\'>أولاد القاضي</h3>'">
+                <img src="/assets/images/logo.png" alt="أولاد القاضي" class="brand-logo">
             </div>
 
-            <button class="nav-item active" data-target="overview">
-                <i class="fa-solid fa-chart-line"></i> <span>نظرة عامة</span>
-            </button>
-            <button class="nav-item" data-target="orders">
+            <button class="nav-item active" data-target="orders">
                 <i class="fa-solid fa-boxes-stacked"></i> <span>إدارة الطلبات</span>
             </button>
             <button class="nav-item" data-target="products">
@@ -94,21 +98,12 @@
             <!-- Header Bar -->
             <header class="top-bar glass-panel">
                 <div class="flex-align gap-3">
-                    <button id="mobile-menu-btn" class="icon-btn mobile-only">
+                    <button type="button" id="mobile-menu-btn" class="icon-btn mobile-only" aria-label="فتح القائمة">
                         <i class="fa-solid fa-bars-staggered"></i>
                     </button>
                     <h1 id="page-title" class="page-title">إدارة الطلبات</h1>
                 </div>
                 <div class="top-bar-right flex-align gap-3">
-                    <div class="notifications-wrap">
-                        <button id="notifications-bell" class="icon-btn notifications-bell" type="button" aria-label="الإشعارات" hidden>
-                            <i class="fa-solid fa-bell"></i><span id="notifications-badge" class="notification-badge" hidden>0</span>
-                        </button>
-                        <div id="notifications-panel" class="notifications-panel glass-panel" hidden>
-                            <div class="notifications-panel-heading"><strong>الإشعارات</strong><span>حسب صلاحيات الحساب</span></div>
-                            <div id="notifications-list" class="notifications-list"></div>
-                        </div>
-                    </div>
                     <div class="date-badge" id="current-date"></div>
                 </div>
             </header>
@@ -116,71 +111,8 @@
             <!-- Views Container -->
             <div class="views-wrapper custom-scroll">
 
-                <!-- OVERVIEW -->
-                <section id="view-overview" class="view-pane active">
-                    <div class="overview-heading glass-panel">
-                        <div>
-                            <span class="overview-kicker"><i class="fa-solid fa-chart-line"></i> متابعة لحظية</span>
-                            <h2>مركز متابعة المعرض</h2>
-                            <p>الإحصائيات والرسوم بتظهر حسب الصلاحيات الممنوحة لكل حساب.</p>
-                        </div>
-                        <div class="overview-actions">
-                            <button class="btn btn-ghost btn-sm" id="staff-help-open" type="button" hidden><i class="fa-solid fa-circle-question"></i> طلب مساعدة</button>
-                            <button class="btn btn-primary btn-sm help-owner-btn" id="owner-help-open" type="button" hidden><i class="fa-solid fa-inbox"></i> طلبات الموظفين <span class="notification-badge" id="help-unread-badge" hidden>0</span></button>
-                        </div>
-                    </div>
-                    <div class="overview-grid" id="overview-stats">
-                        <div class="stat-card glass-panel" data-overview-permission="orders.view"><span><i class="fa-solid fa-cart-shopping"></i> الطلبات الجديدة</span><strong id="stat-new-orders">0</strong></div>
-                        <div class="stat-card glass-panel" data-overview-permission="orders.view"><span><i class="fa-solid fa-money-bill-wave"></i> إجمالي المبيعات</span><strong id="stat-revenue">0</strong></div>
-                        <div class="stat-card glass-panel" data-overview-permission="products.view"><span><i class="fa-solid fa-box"></i> إجمالي المنتجات</span><strong id="stat-products">0</strong></div>
-                        <div class="stat-card glass-panel" data-overview-permission="categories.view"><span><i class="fa-solid fa-layer-group"></i> الأقسام</span><strong id="stat-categories">0</strong></div>
-                        <div class="stat-card glass-panel" data-overview-permission="complaints.view"><span><i class="fa-solid fa-headset"></i> الشكاوى المعلقة</span><strong id="stat-open-complaints">0</strong></div>
-                        <div class="stat-card glass-panel" data-overview-permission="products.view"><span><i class="fa-solid fa-triangle-exclamation"></i> مخزون منخفض</span><strong id="stat-low-stock">0</strong></div>
-                    </div>
-                    <div id="overview-no-access" class="glass-panel overview-empty" hidden>
-                        <i class="fa-solid fa-chart-simple"></i>
-                        <h3>لا توجد إحصائيات مرتبطة بصلاحيات حسابك حالياً</h3>
-                        <p>المالك يقدر يضيف لك صلاحية القسم المناسب من إدارة الموظفين.</p>
-                    </div>
-                    <div class="overview-charts" id="overview-charts">
-                        <article class="overview-chart-card glass-panel" data-overview-permission="orders.view">
-                            <div class="chart-card-heading"><div><span class="chart-kicker">الأداء</span><h3>حركة الطلبات آخر 7 أيام</h3></div><i class="fa-solid fa-chart-line"></i></div>
-                            <div class="chart-canvas" id="orders-trend-chart"></div>
-                        </article>
-                        <article class="overview-chart-card glass-panel" data-overview-permission="orders.view">
-                            <div class="chart-card-heading"><div><span class="chart-kicker">الحالة</span><h3>توزيع حالات الطلبات</h3></div><i class="fa-solid fa-chart-pie"></i></div>
-                            <div class="status-bars" id="orders-status-chart"></div>
-                        </article>
-                        <article class="overview-chart-card glass-panel" data-overview-permission="products.view">
-                            <div class="chart-card-heading"><div><span class="chart-kicker">المخزون</span><h3>أكثر المنتجات احتياجاً للمتابعة</h3></div><i class="fa-solid fa-boxes-stacked"></i></div>
-                            <div class="stock-bars" id="stock-chart"></div>
-                        </article>
-                        <article class="overview-chart-card glass-panel" data-overview-permission="complaints.view">
-                            <div class="chart-card-heading"><div><span class="chart-kicker">خدمة العملاء</span><h3>الشكاوى حسب الحالة</h3></div><i class="fa-solid fa-comments"></i></div>
-                            <div class="status-bars" id="complaints-status-chart"></div>
-                        </article>
-                    </div>
-                    <div class="overview-note glass-panel"><i class="fa-solid fa-rotate"></i> الأرقام والرسوم بتتحدث تلقائياً مع بيانات النظام، ومن غير بيانات وهمية.</div>
-                    <div class="push-notifications-card glass-panel">
-                        <div><span class="chart-kicker">إشعارات الموبايل</span><h3>خليك متابع حتى لو اللوحة مقفولة</h3><p>فعّل إشعارات Chrome على موبايل أندرويد لاستقبال الأحداث الخاصة بصلاحيات حسابك.</p><small id="push-notifications-status">لم يتم تفعيل إشعارات الموبايل بعد.</small></div>
-                        <button class="btn btn-primary btn-sm" id="enable-push-notifications" type="button" hidden><i class="fa-solid fa-bell"></i> تفعيل الإشعارات</button>
-                    </div>
-                    <section class="staff-help-panel glass-panel" id="staff-help-panel" hidden>
-                        <div class="panel-heading"><div><span class="chart-kicker">مراسلة المالك</span><h3>عندك استفسار عن أي رقم؟</h3></div><button class="icon-btn" id="staff-help-close" type="button" aria-label="إغلاق نموذج المساعدة"><i class="fa-solid fa-xmark"></i></button></div>
-                        <form id="staff-help-form" class="staff-help-form">
-                            <div class="form-grid cols-2"><div class="form-group"><label for="staff-help-subject">عنوان الطلب</label><input class="form-control" id="staff-help-subject" maxlength="120" required placeholder="مثلاً: محتاج توضيح رقم الطلبات"></div><div class="form-group"><label for="staff-help-message">التفاصيل</label><textarea class="form-control" id="staff-help-message" rows="3" maxlength="2000" required placeholder="اكتب النقطة اللي محتاج توضيحها من المالك"></textarea></div></div>
-                            <button class="btn btn-primary" type="submit"><i class="fa-solid fa-paper-plane"></i> إرسال للمالك</button>
-                        </form>
-                        <div id="staff-help-list" class="help-list"></div>
-                    </section>
-                    <section class="owner-help-panel glass-panel" id="owner-help-panel" hidden>
-                        <div class="panel-heading"><div><span class="chart-kicker">صندوق الطلبات</span><h3>طلبات الموظفين</h3></div><button class="icon-btn" id="owner-help-close" type="button" aria-label="إغلاق طلبات الموظفين"><i class="fa-solid fa-xmark"></i></button></div>
-                        <div id="owner-help-list" class="help-list"></div>
-                    </section>
-                </section>
-
                 <!-- SECTION 1: ORDERS & BOSTA EXPORT -->
-                <section id="view-orders" class="view-pane">
+                <section id="view-orders" class="view-pane active">
                     <div class="control-bar glass-panel mb-4">
                         <div class="flex-align gap-2">
                             <!-- ONLY Export Bosta Excel Button as requested -->
@@ -197,17 +129,6 @@
                         </div>
                     </div>
 
-                    <div id="customer-requests-panel" class="glass-panel mb-4" hidden>
-                        <div class="section-heading-row">
-                            <div>
-                                <h3 class="section-heading">طلبات العملاء</h3>
-                                <p class="text-subtle text-sm">طلبات الإلغاء أو تعديل بيانات التوصيل. لا يتم تعديل الطلب تلقائياً بعد إنشاء شحنة Bosta.</p>
-                            </div>
-                            <span id="customer-requests-count" class="badge badge-new">0 معلّق</span>
-                        </div>
-                        <div id="customer-requests-container"></div>
-                    </div>
-
                     <!-- Orders Grid Container -->
                     <div id="orders-cards-container" class="orders-grid-container">
                         <!-- Dynamic Order Cards Rendered via JS -->
@@ -218,18 +139,42 @@
                 <section id="view-products" class="view-pane">
                     <div id="subtab-products-list" class="subtab-content active">
                         <div class="control-bar glass-panel mb-4">
-                            <button class="btn btn-primary" id="open-add-product-modal">
+                            <button type="button" class="btn btn-primary" id="open-add-product-modal">
                                 <i class="fa-solid fa-plus"></i> إضافة منتج جديد
                             </button>
-                            <div class="flex-align gap-2 archive-filters" role="group" aria-label="فلترة المنتجات">
-                                <button class="btn btn-ghost active-filter" id="filter-products-active" type="button">النشطة</button>
-                                <button class="btn btn-ghost" id="filter-products-archived" type="button" hidden>الأرشيف</button>
-                            </div>
+                            <button type="button" class="btn btn-emerald hidden" id="open-bulk-import">
+                                <i class="fa-solid fa-file-import"></i> رفع منتجات من Excel
+                            </button>
                             <div class="search-input-wrapper">
                                 <i class="fa-solid fa-magnifying-glass search-icon"></i>
                                 <input type="text" id="search-products-input"
                                     placeholder="بحث باسم المنتج، الـ SKU، أو القسم...">
                             </div>
+                        </div>
+
+                        <div id="bulk-import-panel" class="glass-panel bulk-import-panel hidden" role="region" aria-labelledby="bulk-import-title">
+                            <div class="flex-between mb-3">
+                                <div>
+                                    <h3 id="bulk-import-title" class="tab-heading mb-1"><i class="fa-solid fa-file-excel text-emerald"></i> الرفع المجمع وتحديث المنتجات</h3>
+                                    <p class="text-subtle text-sm">نزّل القالب، املأه، وارفعه مع صور المنتجات. المطابقة بتتم عن طريق SKU واسم ملف الصورة.</p>
+                                </div>
+                                <button type="button" class="btn btn-ghost" id="close-bulk-import">إغلاق</button>
+                            </div>
+                            <div class="bulk-import-grid">
+                                <div class="form-group">
+                                    <label for="bulk-excel-file">ملف المنتجات Excel</label>
+                                    <input type="file" id="bulk-excel-file" class="form-control" accept=".xlsx,.xls,.csv">
+                                </div>
+                                <div class="form-group">
+                                    <label for="bulk-image-files">صور المنتجات (يمكن اختيار صور متعددة)</label>
+                                    <input type="file" id="bulk-image-files" class="form-control" accept="image/png,image/jpeg,image/webp" multiple>
+                                </div>
+                            </div>
+                            <div class="flex-align gap-2 mt-2">
+                                <button type="button" class="btn btn-ghost" id="download-products-template"><i class="fa-solid fa-download"></i> تحميل القالب</button>
+                                <button type="button" class="btn btn-primary" id="start-bulk-import"><i class="fa-solid fa-cloud-arrow-up"></i> بدء الرفع والتحديث</button>
+                            </div>
+                            <div id="bulk-import-status" class="bulk-import-status" role="status" aria-live="polite"></div>
                         </div>
 
                         <div class="products-grid" id="products-cards-container">
@@ -262,7 +207,6 @@
                             <button class="btn btn-ghost active-filter" id="filter-complaints-all">الكل</button>
                             <button class="btn btn-ghost" id="filter-complaints-new">الجديدة (أحمر)</button>
                             <button class="btn btn-ghost" id="filter-complaints-resolved">المحلولة (أخضر)</button>
-                            <button class="btn btn-ghost" id="filter-complaints-archived" hidden>الأرشيف</button>
                         </div>
                     </div>
                     <div class="complaints-grid" id="complaints-cards-container">
@@ -272,12 +216,11 @@
 
                 <!-- SECTION 4: SITE SETTINGS -->
                 <section id="view-settings" class="view-pane">
-                    <div class="settings-scope-switcher" role="tablist" aria-label="نطاق الإعدادات">
-                        <button class="settings-scope-btn active" data-settings-scope="landing">إعدادات صفحة الهبوط</button>
-                        <button class="settings-scope-btn" data-settings-scope="admin">إعدادات لوحة الإدارة</button>
-                    </div>
-                    <div id="landing-settings-pane" class="settings-scope-pane">
-                    <div class="settings-container glass-panel">
+                    <div class="settings-container glass-panel legacy-settings">
+                        <div class="settings-main-tabs" role="tablist" aria-label="إعدادات الموقع">
+                            <button type="button" class="settings-main-tab active" data-settings-view="landing">إعدادات صفحة الهبوط</button>
+                            <button type="button" class="settings-main-tab" data-settings-view="admin">إعدادات لوحة الإدارة</button>
+                        </div>
                         <!-- Settings Sidebar Sub-navigation -->
                         <div class="settings-sidebar">
                             <button class="settings-tab-btn active" data-tab="tab-identity">
@@ -295,11 +238,11 @@
                             <button class="settings-tab-btn" data-tab="tab-shipping">
                                 <i class="fa-solid fa-truck-fast"></i> 5. الشحن المخصص
                             </button>
-                            <button class="settings-tab-btn" data-tab="tab-bosta">
-                                <i class="fa-solid fa-boxes-stacked"></i> 6. Bosta والتتبع
-                            </button>
                             <button class="settings-tab-btn" data-tab="tab-maintenance">
-                                <i class="fa-solid fa-palette"></i> 7. الصيانة والألوان
+                                <i class="fa-solid fa-palette"></i> 6. الصيانة والألوان
+                            </button>
+                            <button class="settings-tab-btn" data-tab="tab-staff">
+                                <i class="fa-solid fa-users-gear"></i> 7. إدارة الموظفين والصلاحيات
                             </button>
                         </div>
 
@@ -368,22 +311,10 @@
                                     <label>تاريخ ووقت الانتهاء (في حالة المؤقت الزمني)</label>
                                     <input type="datetime-local" class="form-control" id="setting-marquee-end-date">
                                 </div>
-                                <div class="form-grid cols-2 mb-3">
-                                    <div class="form-group"><label>عنوان الهيرو الرئيسي</label><input type="text" class="form-control" id="setting-hero-title" value=""></div>
-                                    <div class="form-group"><label>الوصف أسفل الهيرو</label><textarea class="form-control" id="setting-hero-subtitle" rows="2"></textarea></div>
-                                    <div class="form-group"><label>الشعار الصغير في الهيرو</label><input type="text" class="form-control" id="setting-hero-tagline" value=""></div>
-                                    <div class="form-group"><label>عنوان الكتالوج</label><input type="text" class="form-control" id="setting-catalog-title" value=""></div>
-                                    <div class="form-group"><label>وصف الكتالوج</label><input type="text" class="form-control" id="setting-catalog-subtitle" value=""></div>
-                                </div>
-                                <div class="form-group mb-3"><label>بطاقات المميزات الظاهرة في صفحة الهبوط</label>
-                                    <div class="cms-feature-editor">
-                                        <div class="form-grid cols-3"><input class="form-control" id="trust-1-icon" placeholder="رمز"><input class="form-control" id="trust-1-title" placeholder="عنوان الميزة"><input class="form-control" id="trust-1-text" placeholder="وصف الميزة"></div>
-                                        <div class="form-grid cols-3"><input class="form-control" id="trust-2-icon" placeholder="رمز"><input class="form-control" id="trust-2-title" placeholder="عنوان الميزة"><input class="form-control" id="trust-2-text" placeholder="وصف الميزة"></div>
-                                        <div class="form-grid cols-3"><input class="form-control" id="trust-3-icon" placeholder="رمز"><input class="form-control" id="trust-3-title" placeholder="عنوان الميزة"><input class="form-control" id="trust-3-text" placeholder="وصف الميزة"></div>
-                                    </div>
-                                </div>
-                                <div class="form-group mb-3"><label>إظهار أقسام صفحة الهبوط</label>
-                                    <div class="flex-align gap-3 flex-wrap"><label><input type="checkbox" id="show-trust" checked> المميزات</label><label><input type="checkbox" id="show-products" checked> المنتجات</label><label><input type="checkbox" id="show-faq" checked> الأسئلة الشائعة</label><label><input type="checkbox" id="show-testimonials" checked> آراء العملاء</label></div>
+                                <div class="form-group mb-4">
+                                    <label>عنوان الهيرو الرئيسي (Hero Main Title)</label>
+                                    <input type="text" class="form-control" id="setting-hero-title"
+                                        value="قمة التميز والفخامة في منزل الأناقة">
                                 </div>
                                 <button class="btn btn-primary" id="save-content-btn"><i
                                         class="fa-solid fa-floppy-disk"></i> حفظ نصوص الواجهة</button>
@@ -391,16 +322,16 @@
 
                             <!-- TAB 3: CONTACT & SOCIAL LINKS -->
                             <div id="tab-contact" class="tab-content-item">
+                                <div class="legacy-contact-fields form-grid cols-2 mb-4">
+                                    <div class="form-group"><label for="setting-address">عنوان المعرض</label><input type="text" class="form-control" id="setting-address" placeholder="شارع الإصلاح الزراعي - كوم أمبو - أسوان"></div>
+                                    <div class="form-group"><label for="setting-footer-phone">رقم الهاتف</label><input type="tel" class="form-control" id="setting-footer-phone" placeholder="01118060702"></div>
+                                    <div class="form-group"><label for="setting-whatsapp">رقم الواتساب</label><input type="tel" class="form-control" id="setting-whatsapp" placeholder="01118060702"></div>
+                                </div>
                                 <div class="flex-between mb-3">
                                     <h3 class="tab-heading mb-0"><i class="fa-solid fa-share-nodes text-primary"></i>
-                                        بيانات التواصل وروابط السوشيال</h3>
+                                        قنوات التواصل الاجتماعي</h3>
                                     <button class="btn btn-emerald text-sm" id="add-social-link-btn"><i
                                             class="fa-solid fa-plus"></i> إضافة قناة جديدة</button>
-                                </div>
-                                <div class="form-grid cols-2 mb-3">
-                                    <div class="form-group"><label>عنوان المعرض</label><input type="text" id="setting-address" class="form-control" value="شارع الإصلاح الزراعي، بجوار عمر أفقندى، أمام (المان) للعطور"></div>
-                                    <div class="form-group"><label>رقم الهاتف</label><input type="tel" id="setting-phone" class="form-control" value="01118060702" inputmode="numeric"></div>
-                                    <div class="form-group"><label>رقم الواتساب</label><input type="tel" id="setting-whatsapp" class="form-control" value="01118060702" inputmode="numeric"></div>
                                 </div>
                                 <div id="social-links-list" class="social-links-container flex-column gap-2 mb-4">
                                     <!-- Rendered dynamically by JS -->
@@ -425,8 +356,12 @@
 
                             <!-- TAB 5: CUSTOM SHIPPING SETTINGS -->
                             <div id="tab-shipping" class="tab-content-item">
-                                <h3 class="tab-heading"><i class="fa-solid fa-truck-fast text-primary"></i> الشحن المخصص
-                                    وبدائل بوسطة</h3>
+                                <h3 class="tab-heading"><i class="fa-solid fa-truck-fast text-primary"></i> إعدادات Bosta والتتبع</h3>
+                                <div class="form-grid cols-2 mb-4 legacy-bosta-fields">
+                                    <div class="form-group"><label for="setting-bosta-webhook">رابط Webhook</label><input type="url" class="form-control" id="setting-bosta-webhook" placeholder="https://..."></div>
+                                    <div class="form-group"><label for="setting-bosta-payment">نوع الدفع</label><select class="form-control" id="setting-bosta-payment"><option value="cod">الدفع عند الاستلام</option><option value="prepaid">دفع مسبق</option></select></div>
+                                    <div class="form-group"><label for="setting-bosta-size">حجم الشحنة الافتراضي</label><input type="number" class="form-control" id="setting-bosta-size" value="140" min="0"></div>
+                                </div>
                                 <div class="card-item mb-4 flex-between">
                                     <div>
                                         <div class="font-bold text-dark text-lg">تغليب الشحن المخصص (إيقاف حاسبة بوسطة)
@@ -458,105 +393,48 @@
                                         class="fa-solid fa-floppy-disk"></i> حفظ إعدادات الشحن</button>
                             </div>
 
-                            <!-- TAB 6: BOSTA -->
-                            <div id="tab-bosta" class="tab-content-item">
-                                <h3 class="tab-heading"><i class="fa-solid fa-boxes-stacked text-primary"></i> Bosta والتتبع</h3>
-                                <div class="form-group mb-3">
-                                    <label>رابط Webhook الذي يُضاف في Bosta</label>
-                                    <input type="text" class="form-control" id="setting-bosta-webhook-url" readonly value="https://awlad-elkady-admin.vercel.app/api/bosta-webhook" dir="ltr">
-                                    <small class="text-subtle text-sm">هذا الرابط يستقبل تغييرات حالة الشحنة فقط. لا تضف مفتاح API هنا.</small>
-                                </div>
-                                <div class="form-grid cols-2 mb-3">
-                                    <div class="form-group">
-                                        <label>نوع الدفع الحالي</label>
-                                        <input type="text" class="form-control" value="الدفع عند الاستلام (COD)" readonly>
-                                    </div>
-                                    <div class="form-group">
-                                        <label>حجم الشحنة الافتراضي</label>
-                                        <select class="form-control" id="setting-bosta-package-type">
-                                            <option value="SMALL">SMALL</option>
-                                            <option value="MEDIUM">MEDIUM</option>
-                                            <option value="LARGE">LARGE</option>
-                                            <option value="Light Bulky">Light Bulky</option>
-                                            <option value="Heavy Bulky">Heavy Bulky</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div class="notice-card warning-card"><strong>الأمان:</strong> مفتاح Bosta وBusiness Location ID يتخزنوا في Environment Variables على السيرفر فقط، وليس في Admin أو JavaScript.</div>
-                                <button type="button" class="btn btn-primary" id="save-bosta-setting-btn"><i class="fa-solid fa-floppy-disk"></i> حفظ إعداد Bosta</button>
-                            </div>
-
-                            <!-- TAB 7: MAINTENANCE & COLORS -->
+                            <!-- TAB 6: MAINTENANCE MODE -->
                             <div id="tab-maintenance" class="tab-content-item">
                                 <h3 class="tab-heading"><i class="fa-solid fa-palette text-primary"></i> وضع الصيانة
                                 </h3>
 
                                 <!-- Maintenance Mode -->
-                                <div class="maintenance-settings-card">
-                                    <div class="maintenance-settings-head">
+                                <div class="card-item border-danger mb-4">
+                                    <div class="flex-between mb-3">
                                         <div>
-                                            <span class="maintenance-kicker"><i class="fa-solid fa-sparkles"></i> تجربة زائر راقية</span>
-                                            <div class="font-bold text-danger text-lg">تفعيل وضع الصيانة للزوار</div>
-                                            <div class="text-subtle text-sm mt-1">الصفحة هتظهر بلوجو المتجر ورسالتك وموعد العودة والعداد التنازلي.</div>
+                                            <div class="font-bold text-danger text-lg">تفعيل وضع الصيانة (إغلاق الموقع
+                                                للزوار)</div>
+                                            <div class="text-subtle text-sm mt-1">عند التفعيل تظهر صفحة توقف مؤقت
+                                                للجمهور</div>
                                         </div>
-                                        <label class="switch-toggle" title="تفعيل أو إيقاف وضع الصيانة">
+                                        <label class="switch-toggle">
                                             <input type="checkbox" id="maintenance-mode-toggle">
                                             <span class="slider"></span>
                                         </label>
                                     </div>
-                                    <div class="form-grid cols-2 maintenance-form-grid">
-                                        <div class="form-group">
-                                            <label for="maintenance-message">رسالة الزوار</label>
-                                            <textarea class="form-control" id="maintenance-message" rows="3" maxlength="240">بنجهز لكم تجربة أفضل وعروض جديدة. هنرجع قريباً بكل جديد!</textarea>
-                                            <div class="text-subtle text-xs mt-1">اكتب الرسالة اللي تحب العميل يشوفها.</div>
-                                        </div>
-                                        <div class="form-group">
-                                            <label for="maintenance-end-at">موعد العودة المتوقع</label>
-                                            <input type="datetime-local" class="form-control" id="maintenance-end-at">
-                                            <div class="text-subtle text-xs mt-1">اختار اليوم والتاريخ والساعة حسب توقيت مصر.</div>
-                                        </div>
-                                    </div>
-                                    <div class="maintenance-admin-preview">
-                                        <img id="maintenance-preview-logo" src="/assets/images/logo.png" alt="معاينة لوجو المتجر">
-                                        <div>
-                                            <strong>المعاينة هتظهر للعميل</strong>
-                                            <span>لوجو + رسالة مخصصة + موعد العودة + عداد بالأيام والساعات والدقائق والثواني.</span>
-                                        </div>
+                                    <div class="form-group">
+                                        <label>رسالة التوقف للزوار</label>
+                                        <textarea class="form-control" id="maintenance-message"
+                                            rows="2">الموقع يخضع حالياً لأعمال التحديث وتجهيز العروض الجديدة... سنعود قريباً!</textarea>
                                     </div>
                                 </div>
                                 <button class="btn btn-danger" id="save-maintenance-btn"><i
-                                        class="fa-solid fa-shield"></i> حفظ إعدادات الصيانة</button>
+                                        class="fa-solid fa-shield"></i> تطبيق إعدادات الصيانة والألوان</button>
                             </div>
 
-                        </div>
-                    </div>
-                    </div>
-                    <div id="admin-settings-pane" class="settings-scope-pane hidden">
-                        <div class="settings-container glass-panel admin-settings-panel">
-                            <h3 class="tab-heading"><i class="fa-solid fa-sliders text-primary"></i> إعدادات لوحة الإدارة</h3>
-                            <div id="staff-management-panel" class="staff-management-panel" hidden>
-                                <div class="panel-heading-row"><div><h4><i class="fa-solid fa-users-gear text-primary"></i> إدارة الموظفين</h4><p class="text-subtle text-sm">إنشاء حسابات منفصلة برقم الموبايل وتحديد كل صلاحية بشكل مستقل.</p></div></div>
-                                <form id="staff-form" class="form-grid cols-2 mb-3">
-                                    <input type="hidden" id="staff-id">
-                                    <div class="form-group"><label for="staff-phone">رقم موبايل الموظف</label><input id="staff-phone" class="form-control" inputmode="numeric" placeholder="01xxxxxxxxx" required></div>
-                                    <div class="form-group"><label for="staff-name">اسم الموظف</label><input id="staff-name" class="form-control" required></div>
-                                    <div class="form-group"><label for="staff-password">كلمة سر جديدة <span class="text-subtle">(للتعيين أو التغيير — 8 أحرف على الأقل)</span></label><div class="password-field-wrap"><input id="staff-password" type="password" class="form-control" minlength="8" autocomplete="new-password"><button type="button" class="password-toggle-btn" id="toggle-staff-password" aria-label="إظهار كلمة مرور الموظف" title="إظهار كلمة المرور"><i class="fa-solid fa-eye" aria-hidden="true"></i></button></div></div>
-                                    <div class="form-group"><label for="staff-active">الحالة</label><label class="switch-toggle"><input id="staff-active" type="checkbox" checked><span class="slider"></span></label></div>
-                                    <div class="staff-permissions-grid form-grid cols-2" style="grid-column:1/-1">
-                                        <label><input type="checkbox" data-staff-permission="orders.view"> مشاهدة الطلبات</label><label><input type="checkbox" data-staff-permission="orders.update_status"> تغيير حالة الطلب</label><label><input type="checkbox" data-staff-permission="orders.update_customer"> تعديل بيانات العميل</label><label><input type="checkbox" data-staff-permission="orders.export"> تصدير الطلبات</label><label><input type="checkbox" data-staff-permission="products.view"> مشاهدة المنتجات</label><label><input type="checkbox" data-staff-permission="products.create"> إضافة منتجات</label><label><input type="checkbox" data-staff-permission="products.update"> تعديل المنتجات والمخزون</label><label><input type="checkbox" data-staff-permission="products.delete"> أرشفة المنتجات</label><label><input type="checkbox" data-staff-permission="products.upload"> رفع صور المنتجات</label><label><input type="checkbox" data-staff-permission="categories.view"> مشاهدة الأقسام</label><label><input type="checkbox" data-staff-permission="categories.create"> إضافة الأقسام</label><label><input type="checkbox" data-staff-permission="categories.update"> تعديل الأقسام</label><label><input type="checkbox" data-staff-permission="categories.assign"> ربط المنتجات بالأقسام</label><label><input type="checkbox" data-staff-permission="complaints.view"> مشاهدة الشكاوى</label><label><input type="checkbox" data-staff-permission="complaints.update_status"> تغيير حالة الشكوى</label><label><input type="checkbox" data-staff-permission="complaints.delete"> أرشفة الشكاوى</label><label><input type="checkbox" data-staff-permission="landing.view"> مشاهدة إعدادات الهبوط</label><label><input type="checkbox" data-staff-permission="landing.edit"> تعديل إعدادات الهبوط العامة</label><label><input type="checkbox" data-staff-permission="landing.edit_identity"> تعديل الهوية والـSEO</label><label><input type="checkbox" data-staff-permission="landing.edit_content"> تعديل محتوى الهيرو والكتالوج</label><label><input type="checkbox" data-staff-permission="landing.edit_contact"> تعديل التواصل والسوشيال</label><label><input type="checkbox" data-staff-permission="landing.edit_faq"> تعديل الأسئلة الشائعة</label><label><input type="checkbox" data-staff-permission="landing.edit_shipping"> تعديل الشحن</label><label><input type="checkbox" data-staff-permission="landing.edit_bosta"> تعديل إعدادات Bosta</label><label><input type="checkbox" data-staff-permission="landing.edit_maintenance"> تعديل الصيانة</label><label><input type="checkbox" data-staff-permission="bosta.create"> إنشاء/إعادة محاولة شحنة Bosta</label><label><input type="checkbox" data-staff-permission="bosta.pack"> تأكيد التغليف</label><label><input type="checkbox" data-staff-permission="bosta.print_awb"> طباعة بوليصة Bosta</label>
-                                <label><input type="checkbox" data-staff-permission="bosta.request_pickup"> طلب استلام المندوب من Bosta</label><label><input type="checkbox" data-staff-permission="bosta.cancel_delivery"> إلغاء شحنة Bosta بعد المراجعة</label>
+                            <!-- TAB 7: STAFF ACCOUNTS -->
+                            <div id="tab-staff" class="tab-content-item">
+                                <div class="flex-between mb-3">
+                                    <div>
+                                        <h3 class="tab-heading mb-1"><i class="fa-solid fa-users-gear text-primary"></i> إدارة الموظفين وتعيين الصلاحيات</h3>
+                                        <p class="text-subtle text-sm">أضف الموظفين أو عطّل حساباتهم وحدد الصلاحيات القديمة كاملة.</p>
                                     </div>
-                                    <div class="form-actions" style="grid-column:1/-1"><button type="submit" class="btn btn-primary">حفظ الموظف</button><button type="button" class="btn btn-secondary" id="staff-reset-btn">مسح النموذج</button></div>
-                                </form>
-                                <div id="staff-list" class="staff-list"><p class="text-subtle">جاري تحميل الموظفين…</p></div>
+                                    <button type="button" class="btn btn-primary text-sm" id="open-add-staff-btn"><i class="fa-solid fa-user-plus"></i> إضافة موظف</button>
+                                </div>
+                                <div id="staff-list-container" class="flex-column gap-2"></div>
+                                <div id="staff-status" class="bulk-import-status" role="status" aria-live="polite"></div>
                             </div>
-                            <div class="form-grid cols-2 mb-3">
-                                <div class="form-group"><label>عدد العناصر في كل صفحة</label><select id="admin-page-size" class="form-control"><option value="12">12</option><option value="24">24</option><option value="48">48</option></select></div>
-                                <div class="form-group"><label>حاسبة الشحن</label><label class="switch-toggle"><input type="checkbox" id="admin-show-shipping-calc" checked><span class="slider"></span></label></div>
-                                <div class="form-group"><label>تصدير Excel</label><label class="switch-toggle"><input type="checkbox" id="admin-enable-excel" checked><span class="slider"></span></label></div>
-                            </div>
-                            <p class="text-subtle text-sm">الإعدادات دي خاصة باللوحة فقط، ومش بتغيّر شكل صفحة الهبوط.</p>
-                            <button class="btn btn-primary" id="save-admin-settings-btn"><i class="fa-solid fa-floppy-disk"></i> حفظ إعدادات اللوحة</button>
+
                         </div>
                     </div>
                 </section>
@@ -566,18 +444,14 @@
     </div>
 
     <!-- FLOATING ASWAN BOSTA CONTRACT SHIPPING CALCULATOR SIDEBAR -->
-    <div class="floating-calc-controls" aria-label="تحكم حاسبة الشحن">
-        <button class="floating-calc-trigger" id="open-shipping-calc" title="حاسبة عقد أسوان المعتمدة مع بوسطة">
-            <i class="fa-solid fa-calculator"></i>
-        </button>
-        <button class="floating-calc-hide" id="hide-shipping-calc" type="button" title="إخفاء الحاسبة عندي" aria-label="إخفاء الحاسبة عندي">×</button>
-        <button class="floating-calc-restore btn btn-ghost btn-sm" id="restore-shipping-calc" type="button" hidden>إظهار الحاسبة</button>
-    </div>
+    <button type="button" class="floating-calc-trigger" id="open-shipping-calc" title="حاسبة عقد أسوان المعتمة مع بوسطة">
+        <i class="fa-solid fa-calculator"></i>
+    </button>
 
     <div id="shipping-sidebar" class="drawer-panel glass-panel">
         <div class="drawer-header">
             <h3><i class="fa-solid fa-truck-ramp-box text-primary"></i> حاسبة أسعار عقد بوسطة - أسوان</h3>
-            <button class="icon-btn" id="close-shipping-calc"><i class="fa-solid fa-xmark"></i></button>
+            <button type="button" class="icon-btn" id="close-shipping-calc" aria-label="إغلاق حاسبة الشحن"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div class="drawer-body custom-scroll">
             <div class="form-group mb-3">
@@ -635,7 +509,7 @@
     </div>
 
     <!-- MODAL 1: ADD / EDIT PRODUCT -->
-    <div id="product-modal" class="modal-overlay hidden">
+    <div id="product-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="product-modal-title">
         <div class="modal-card glass-panel">
             <div class="modal-header">
                 <h3 id="product-modal-title">إضافة منتج جديد</h3>
@@ -679,16 +553,17 @@
                             <select id="p-category-select" class="form-control" multiple></select>
                             <small class="text-subtle text-sm">استخدم Ctrl / Command لاختيار أكثر من قسم</small>
                             <!-- Populated dynamically from categories -->
+                            </select>
                         </div>
                         <div class="form-group">
                             <label>حجم بوسطة الشحنة</label>
                             <select id="p-bosta-size" class="form-control">
-                                <option value="140" selected>حجم صغير و متوسط (140 ج)</option>
+                                <option value="140">حجم صغير و متوسط (140 ج)</option>
                                 <option value="145">حجم كبير L (145 ج)</option>
                                 <option value="150">حجم أكبر XL (150 ج)</option>
                                 <option value="155">كيس أبيض XXL (155 ج)</option>
                                 <option value="240">شحنة كبيرة (240 ج)</option>
-                                <option value="994">شحنة ضخمة - أجهزة منزلية (994 ج)</option>
+                                <option value="994" selected>شحنة ضخمة - أجهزة منزلية (994 ج)</option>
                             </select>
                         </div>
                     </div>
@@ -741,7 +616,7 @@
     </div>
 
     <!-- MODAL 2: ADD / EDIT CATEGORY (CATEGORIES CRUD) -->
-    <div id="category-modal" class="modal-overlay hidden">
+    <div id="category-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="cat-modal-title">
         <div class="modal-card glass-panel" style="max-width: 480px;">
             <div class="modal-header">
                 <h3 id="cat-modal-title">إضافة قسم جديد</h3>
@@ -760,16 +635,6 @@
                         <input type="text" id="cat-desc" class="form-control"
                             placeholder="وصف يعبر عن القسم ومحتوياته...">
                     </div>
-                    <div class="form-group mb-3 category-image-field">
-                        <label for="cat-image-file">صورة القسم <span class="text-subtle">(اختيارية)</span></label>
-                        <input type="file" id="cat-image-file" class="form-control" accept="image/png,image/jpeg,image/webp">
-                        <input type="hidden" id="cat-image-url" value="">
-                        <div class="category-image-preview-wrap" id="cat-image-preview-wrap" hidden>
-                            <img id="cat-image-preview" class="category-image-preview" alt="معاينة صورة القسم">
-                            <button type="button" class="btn btn-ghost btn-sm" id="cat-image-remove"><i class="fa-solid fa-trash"></i> استخدام الصورة الافتراضية</button>
-                        </div>
-                        <small class="form-hint">ارفع صورة واضحة للقسم. لو ما رفعتش صورة، المتجر هيختار صورة افتراضية مناسبة من اسم القسم.</small>
-                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-ghost close-modal">إلغاء</button>
@@ -780,7 +645,7 @@
     </div>
 
     <!-- MODAL 3: COMPLAINT DETAILS & ACTIONS -->
-    <div id="complaint-modal" class="modal-overlay hidden">
+    <div id="complaint-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-c-client">
         <div class="modal-card glass-panel" style="max-width: 520px;">
             <div class="modal-header">
                 <h3 id="modal-c-client">تفاصيل الشكوى</h3>
@@ -812,11 +677,60 @@
         </div>
     </div>
 
+    <!-- MODAL: ADD / EDIT STAFF -->
+    <div id="staff-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="staff-modal-title">
+        <div class="modal-card glass-panel" style="max-width: 520px;">
+            <div class="modal-header">
+                <h3 id="staff-modal-title">إضافة موظف</h3>
+                <button type="button" class="icon-btn close-modal" aria-label="إغلاق"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form id="staff-form">
+                <div class="modal-body custom-scroll">
+                    <input type="hidden" id="staff-edit-id">
+                    <div class="form-group mb-3">
+                        <label for="staff-phone">رقم الموظف</label>
+                        <input type="tel" id="staff-phone" class="form-control" inputmode="numeric" required>
+                    </div>
+                    <div class="form-group mb-3">
+                        <label for="staff-email">إيميل الدخول في Supabase</label>
+                        <input type="email" id="staff-email" class="form-control" required>
+                    </div>
+                    <div class="form-group mb-3">
+                        <label for="staff-permissions">الصلاحيات</label>
+                                                                <div id="staff-permissions" class="legacy-permissions-grid">
+                                                                    <label><input type="checkbox" value="orders"> مشاهدة الطلبات</label>
+                                                                    <label><input type="checkbox" value="update_orders"> تعديل حالة الطلبات</label>
+                                                                    <label><input type="checkbox" value="products"> إدارة المنتجات</label>
+                                                                    <label><input type="checkbox" value="categories"> إدارة الأقسام</label>
+                                                                    <label><input type="checkbox" value="complaints"> إدارة الشكاوى</label>
+                                                                    <label><input type="checkbox" value="faqs"> إدارة الأسئلة الشائعة</label>
+                                                                    <label><input type="checkbox" value="socials"> إدارة روابط التواصل</label>
+                                                                    <label><input type="checkbox" value="shipping"> إدارة الشحن</label>
+                                                                    <label><input type="checkbox" value="bulk_import"> الرفع المجمع للمنتجات</label>
+                                                                    <label><input type="checkbox" value="bosta_cancel"> إلغاء شحنة بوسطة</label>
+                                                                </div>
+                    </div>
+                    <input type="hidden" id="staff-bulk-permission" value="">
+                                        <label class="switch-toggle mb-3">
+                    <label class="switch-toggle">
+                        <input type="checkbox" id="staff-active" checked>
+                        <span class="slider"></span>
+                        <span class="text-subtle text-sm" style="margin-right:3rem;white-space:nowrap">الحساب نشط</span>
+                    </label>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-ghost close-modal">إلغاء</button>
+                    <button type="submit" class="btn btn-primary">حفظ الموظف</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- MODAL 4: ADD FAQ -->
-    <div id="faq-modal" class="modal-overlay hidden">
+    <div id="faq-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="faq-modal-title">
         <div class="modal-card glass-panel" style="max-width: 500px;">
             <div class="modal-header">
-                <h3>إضافة سؤال شائع</h3>
+                <h3 id="faq-modal-title">إضافة سؤال شائع</h3>
                 <button class="icon-btn close-modal"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <form id="faq-form">
@@ -840,11 +754,9 @@
         </div>
     </div>
 
-    <script>window.ADMIN_API = true;</script>
-    <script src="/assets/js/config.js"></script>
-    <script src="/assets/js/supabase-client.js"></script>
-    <script src="assets/js/admin.js"></script>
-    <script src="assets/js/notifications.js"></script>
+    <script src="/assets/js/config.js" defer></script>
+    <script src="/assets/js/supabase-client.js" defer></script>
+    <script src="assets/js/admin.js" defer></script>
 </body>
 
 </html>
