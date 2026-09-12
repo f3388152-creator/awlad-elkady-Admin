@@ -17,6 +17,7 @@
     <!-- Cairo Font -->
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
     <!-- SheetJS for Bosta Excel Export -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" integrity="sha512-r22gChDnGvBylk90+2e/ycr3RVrDi8DIOkIGNhJlKfuyQM4tIRAI062MaV8sfjQKYVGjOBaZBOA87z+IhZE9DA==" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
     <link rel="stylesheet" href="assets/css/admin.css">
@@ -241,6 +242,12 @@
                             <button class="settings-tab-btn" data-tab="tab-maintenance" data-permission="edit_maintenance">
                                 <i class="fa-solid fa-palette"></i> 6. الصيانة والألوان
                             </button>
+                            <button class="settings-tab-btn" data-tab="tab-profile">
+                                <i class="fa-solid fa-user-gear"></i> حسابي
+                            </button>
+                            <button class="settings-tab-btn" data-tab="tab-requests" data-permission="manage_staff">
+                                <i class="fa-solid fa-inbox"></i> طلبات الموظفين
+                            </button>
                             <button class="settings-tab-btn" data-tab="tab-staff" data-permission="manage_staff">
                                 <i class="fa-solid fa-users-gear"></i> 7. إدارة الموظفين والصلاحيات
                             </button>
@@ -329,8 +336,9 @@
                                     </div>
                                     <div class="legacy-contact-fields form-grid cols-2 mb-4">
                                         <div class="form-group"><label for="setting-address">عنوان المعرض</label><input type="text" class="form-control" id="setting-address" placeholder="شارع الإصلاح الزراعي - كوم أمبو - أسوان"></div>
-                                        <div class="form-group"><label for="setting-footer-phone">رقم الهاتف</label><input type="tel" class="form-control" id="setting-footer-phone" placeholder="01118060702"></div>
-                                        <div class="form-group"><label for="setting-whatsapp">رقم الواتساب</label><input type="tel" class="form-control" id="setting-whatsapp" placeholder="01118060702"></div>
+                                        <div class="form-group"><label for="setting-footer-phone">رقم الهاتف</label><input type="tel" class="form-control" id="setting-footer-phone" placeholder="01118060702"><label class="switch-toggle"><input type="checkbox" id="setting-footer-phone-visible" checked><span class="slider"></span><span class="switch-label">إظهار الرقم</span></label></div>
+                                        <div class="form-group"><label for="setting-whatsapp">رقم الواتساب</label><input type="tel" class="form-control" id="setting-whatsapp" placeholder="01118060702"><label class="switch-toggle"><input type="checkbox" id="setting-whatsapp-visible" checked><span class="slider"></span><span class="switch-label">إظهار الرقم</span></label></div>
+                                        <div class="form-group"><label for="setting-map-lat">إحداثيات المعرض</label><div class="form-grid cols-2"><input type="number" step="0.0001" id="setting-map-lat" class="form-control" placeholder="خط العرض"><input type="number" step="0.0001" id="setting-map-lng" class="form-control" placeholder="خط الطول"></div><small class="text-subtle">حرّك الدبوس على الخريطة أو عدّل الإحداثيات يدويًا.</small><div id="admin-store-map" class="store-map" aria-label="خريطة موقع المعرض"></div></div>
                                     </div>
                                 </section>
                                 <section class="settings-section social-settings-section" aria-labelledby="social-settings-title">
@@ -342,7 +350,7 @@
                                     <button class="btn btn-emerald text-sm" id="add-social-link-btn"><i
                                             class="fa-solid fa-plus"></i> إضافة قناة جديدة</button>
                                 </div>
-                                <div id="social-links-list" class="social-links-container flex-column gap-2 mb-4">
+                                <div id="social-links-list" class="social-links-container flex-column gap-2 mb-4 smart-brand-grid">
                                     <!-- Rendered dynamically by JS -->
                                 </div>
                                 <button class="btn btn-primary" id="save-contact-btn"><i
@@ -432,6 +440,26 @@
                                         class="fa-solid fa-shield"></i> تطبيق إعدادات الصيانة والألوان</button>
                             </div>
 
+                            <!-- TAB: MY PROFILE -->
+                            <div id="tab-profile" class="tab-content-item">
+                                <h3 class="tab-heading"><i class="fa-solid fa-user-gear text-primary"></i> حسابي</h3>
+                                <div class="form-grid cols-2 mb-3">
+                                    <div class="form-group"><label>الاسم</label><input type="text" id="profile-name" class="form-control"></div>
+                                    <div class="form-group"><label>رقم الموبايل</label><input type="tel" id="profile-phone" class="form-control"></div>
+                                    <div class="form-group"><label>الصورة الشخصية</label><input type="url" id="profile-avatar" class="form-control" placeholder="رابط الصورة"></div>
+                                </div>
+                                <button class="btn btn-primary" id="save-profile-btn">حفظ بياناتي</button>
+                                <hr class="my-3">
+                                <h4>طلب تغيير كلمة السر</h4>
+                                <textarea id="password-request-reason" class="form-control mb-2" rows="3" placeholder="اكتب سبب الطلب"></textarea>
+                                <button class="btn btn-ghost" id="submit-password-request-btn">إرسال الطلب</button>
+                                <div id="profile-request-result" class="bulk-import-status mt-2"></div>
+                            </div>
+                            <!-- TAB: STAFF REQUESTS -->
+                            <div id="tab-requests" class="tab-content-item" data-permission="manage_staff">
+                                <h3 class="tab-heading"><i class="fa-solid fa-inbox text-primary"></i> طلبات الموظفين</h3>
+                                <div id="profile-requests-list" class="flex-column gap-2"></div>
+                            </div>
                             <!-- TAB 7: STAFF ACCOUNTS -->
                             <div id="tab-staff" class="tab-content-item" data-permission="manage_staff">
                                 <div class="mb-3">
@@ -753,6 +781,7 @@
     </div>
     <div id="admin-toast" class="admin-toast" role="status" aria-live="polite"></div>
 
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
     <script src="/assets/js/config.js" defer></script>
     <script src="/assets/js/supabase-client.js" defer></script>
     <script src="assets/js/admin.js" defer></script>

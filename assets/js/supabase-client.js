@@ -8,7 +8,7 @@ const Supabase = {
   get url() { return SUPABASE_CONFIG.url; },
   get key() { return SUPABASE_CONFIG.anonKey; },
   get headers() {
-    const token = sessionStorage.getItem('supabase_access_token');
+    const token = localStorage.getItem('supabase_access_token') || sessionStorage.getItem('supabase_access_token');
     return {
       'Content-Type': 'application/json',
       'apikey': SUPABASE_CONFIG.anonKey,
@@ -24,12 +24,14 @@ const Supabase = {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error_description || data.msg || 'بيانات الدخول غير صحيحة');
-    sessionStorage.setItem('supabase_access_token', data.access_token);
-    if (data.refresh_token) sessionStorage.setItem('supabase_refresh_token', data.refresh_token);
+    localStorage.setItem('supabase_access_token', data.access_token);
+    if (data.refresh_token) localStorage.setItem('supabase_refresh_token', data.refresh_token);
     return data;
   },
 
   signOut() {
+    localStorage.removeItem('supabase_access_token');
+    localStorage.removeItem('supabase_refresh_token');
     sessionStorage.removeItem('supabase_access_token');
     sessionStorage.removeItem('supabase_refresh_token');
   },

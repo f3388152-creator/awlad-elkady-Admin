@@ -134,3 +134,5 @@ textarea {
 .admin-toast { position: fixed; z-index: 2500; left: 1rem; bottom: 1rem; padding: .75rem 1rem; border-radius: var(--radius-md); background: var(--clr-dark); color: #fff; opacity: 0; transform: translateY(12px); pointer-events: none; transition: var(--transition); }
 .admin-toast.visible { opacity: 1; transform: translateY(0); }
 @media (max-width: 600px) { .permission-card-grid { grid-template-columns: 1fr; } .settings-save-bar { right: .75rem; left: .75rem; transform: none; justify-content: space-between; } .settings-save-bar span { font-size: .74rem; } .staff-card-identity { max-width: 65%; } }
+
+.store-map{width:100%;min-height:260px;margin-top:12px;border:1px solid var(--clr-border);border-radius:10px;overflow:hidden;background:#e8eee9}.store-map .leaflet-control-attribution{font-size:10px}

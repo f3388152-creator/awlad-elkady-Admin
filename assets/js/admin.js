@@ -91,6 +91,18 @@ function initPasswordAuth() {
     const dashboard = document.getElementById('dashboard');
 
     if (loginForm && loginScreen) {
+        fetch('/api/admin?action=check', { credentials: 'include' }).then(response => {
+            if (response.ok) {
+                loginScreen.classList.add('unlocked');
+                dashboard.classList.remove('hidden');
+                return response.json();
+            }
+            throw new Error('not authenticated');
+        }).then(details => {
+            window.ADMIN_ACCESS = { admin: details.admin === true, owner: details.admin === true, permissions: details.permissions || (details.admin ? { '*': true } : {}) };
+            applyPermissionVisibility();
+            if (details.admin === true) initStaffAccounts();
+        }).catch(() => {});
         loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const password = pwdInput ? pwdInput.value : '';
@@ -112,6 +124,7 @@ function initPasswordAuth() {
                 }
                 loginScreen.classList.add('unlocked');
                 dashboard.classList.remove('hidden');
+                localStorage.setItem('admin_authenticated', 'true');
                 window.ADMIN_ACCESS = { admin: details.admin === true, owner: details.admin === true, permissions: details.permissions || (details.admin ? { '*': true } : {}) };
                 applyPermissionVisibility();
                 if (!details.admin) fetch('/api/admin?action=presence', { method: 'POST', credentials: 'include' });
@@ -150,6 +163,7 @@ function initPasswordAuth() {
             document.getElementById('bulk-import-panel')?.classList.add('hidden');
             document.querySelector('.settings-tab-btn[data-tab="tab-staff"]')?.classList.add('hidden');
             if (pwdInput) pwdInput.value = '';
+            localStorage.removeItem('admin_authenticated');
             const employeePhoneInput = document.getElementById('employee-phone');
             if (employeePhoneInput) employeePhoneInput.value = '';
             if (loginError) loginError.textContent = '';
@@ -986,6 +1000,30 @@ function applyPermissionVisibility() {
 // ==========================================
 let sampleSocials = [];
 let sampleFaqs = [];
+let adminStoreMap = null;
+let adminStoreMarker = null;
+
+function initAdminStoreMap() {
+    const container = document.getElementById('admin-store-map');
+    if (!container || typeof L === 'undefined') return;
+    const latInput = document.getElementById('setting-map-lat');
+    const lngInput = document.getElementById('setting-map-lng');
+    const fallback = [24.4767, 32.9463];
+    const lat = Number(latInput?.value) || fallback[0];
+    const lng = Number(lngInput?.value) || fallback[1];
+    adminStoreMap = L.map(container).setView([lat, lng], 15);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors' }).addTo(adminStoreMap);
+    adminStoreMarker = L.marker([lat, lng], { draggable: true }).addTo(adminStoreMap);
+    const syncInputs = point => { latInput.value = point.lat.toFixed(7); lngInput.value = point.lng.toFixed(7); markSettingsDirty(); };
+    adminStoreMarker.on('dragend', event => syncInputs(event.target.getLatLng()));
+    adminStoreMap.on('click', event => { adminStoreMarker.setLatLng(event.latlng); syncInputs(event.latlng); });
+    [latInput, lngInput].forEach(input => input?.addEventListener('change', () => {
+        const point = L.latLng(Number(latInput.value) || fallback[0], Number(lngInput.value) || fallback[1]);
+        adminStoreMarker.setLatLng(point); adminStoreMap.setView(point);
+    }));
+    setTimeout(() => adminStoreMap.invalidateSize(), 100);
+}
+
 
 async function initSiteSettings() {
     sampleSocials = await sb_fetch('socials') || [];
@@ -1014,6 +1052,9 @@ async function initSiteSettings() {
         // Populating Toggles
         if (settings.shipping_custom != null) document.getElementById('custom-shipping-master-toggle').checked = settings.shipping_custom === true;
         if (settings.maintenance_mode != null) document.getElementById('maintenance-mode-toggle').checked = settings.maintenance_mode === true;
+        if (document.getElementById('setting-footer-phone-visible')) document.getElementById('setting-footer-phone-visible').checked = settings.footer_phone_visible !== false;
+        if (document.getElementById('setting-whatsapp-visible')) document.getElementById('setting-whatsapp-visible').checked = settings.whatsapp_visible !== false;
+        setValue('setting-map-lat', settings.map_latitude); setValue('setting-map-lng', settings.map_longitude);
         if (settings.maintenance_message != null) setValue('maintenance-message', settings.maintenance_message);
         if (settings.shipping_type != null) setValue('custom-shipping-type', settings.shipping_type);
         if (settings.shipping_flat_rate != null) setValue('custom-shipping-flat-rate', settings.shipping_flat_rate);
@@ -1023,6 +1064,7 @@ async function initSiteSettings() {
         });
     }
 
+    initAdminStoreMap();
     renderSocialLinks();
     renderFaqs();
 
@@ -1120,7 +1162,20 @@ async function initSiteSettings() {
         });
     }
 
-    // Save buttons logic
+    document.getElementById('submit-password-request-btn')?.addEventListener('click', async () => {
+        const reason = document.getElementById('password-request-reason')?.value?.trim();
+        if (!reason) return alert('اكتب سبب الطلب أولاً');
+        const response = await fetch('/api/admin?action=profile-requests', {method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body:JSON.stringify({reason})});
+        document.getElementById('profile-request-result').textContent = response.ok ? 'تم إرسال الطلب للإدارة.' : 'تعذر إرسال الطلب.';
+    });
+    const requestsList = document.getElementById('profile-requests-list');
+    if (requestsList && window.ADMIN_ACCESS?.admin) {
+        fetch('/api/admin?action=profile-requests', {credentials:'include'}).then(response => response.ok ? response.json() : []).then(rows => {
+            requestsList.innerHTML = rows.map(row => `<div class="card-item"><strong>${escapeAdminHtml(row.reason)}</strong><span class="text-subtle">${row.status}</span><button class="btn btn-emerald btn-sm" data-request-id="${row.id}">موافقة</button><button class="btn btn-danger-ghost btn-sm" data-reject-id="${row.id}">رفض</button></div>`).join('');
+            requestsList.querySelectorAll('[data-request-id]').forEach(button => button.onclick = () => reviewProfileRequest(button.dataset.requestId, 'approved'));
+            requestsList.querySelectorAll('[data-reject-id]').forEach(button => button.onclick = () => reviewProfileRequest(button.dataset.rejectId, 'rejected'));
+        });
+    }
     const wrapSaveBtn = (id, saveFn) => {
         const btn = document.getElementById(id);
         if (btn) {
@@ -1168,7 +1223,11 @@ async function initSiteSettings() {
         await sb_update('site_settings', 1, {
             address: document.getElementById('setting-address')?.value?.trim() || null,
             footer_phone: document.getElementById('setting-footer-phone')?.value?.trim() || null,
-            whatsapp_number: document.getElementById('setting-whatsapp')?.value?.trim() || null
+            whatsapp_number: document.getElementById('setting-whatsapp')?.value?.trim() || null,
+            footer_phone_visible: document.getElementById('setting-footer-phone-visible')?.checked !== false,
+            whatsapp_visible: document.getElementById('setting-whatsapp-visible')?.checked !== false,
+            map_latitude: Number(document.getElementById('setting-map-lat')?.value) || null,
+            map_longitude: Number(document.getElementById('setting-map-lng')?.value) || null
         });
     });
 
@@ -1223,13 +1282,15 @@ function initSettingsSaveBar() {
 function renderSocialLinks() {
     const list = document.getElementById('social-links-list');
     if (!list) return;
-
-    list.innerHTML = sampleSocials.map(s => `
+    const brands = [{name:'فيسبوك',icon:'fa-brands fa-facebook-f'},{name:'إنستجرام',icon:'fa-brands fa-instagram'},{name:'تيك توك',icon:'fa-brands fa-tiktok'},{name:'يوتيوب',icon:'fa-brands fa-youtube'},{name:'واتساب',icon:'fa-brands fa-whatsapp'}];
+    const items = brands.map(brand => sampleSocials.find(item => String(item.name).toLowerCase().includes(brand.name.toLowerCase())) || {id:null,name:brand.name,icon:brand.icon,link:'',visible:false});
+    list.innerHTML = items.map(s => `
         <div class="card-item flex-between">
             <div class="flex-align gap-3">
                 <i class="${s.icon} text-primary text-lg"></i>
                 <div>
                     <strong class="text-dark block">${s.name}</strong>
+                    <input class="form-control social-brand-link" data-social-id="${s.id || ''}" value="${escapeAdminHtml(s.link || '', 500)}" placeholder="رابط ${s.name}">
                     <span class="text-subtle text-sm">${s.link}</span>
                 </div>
             </div>
@@ -1610,3 +1671,9 @@ async function deleteStaffAccount(id) {
     renderStaffAccounts();
 }
 
+
+async function reviewProfileRequest(id, status) {
+    const adminReason = status === 'rejected' ? prompt('سبب الرفض:') || '' : '';
+    await fetch(`/api/admin?action=profile-requests&id=${encodeURIComponent(id)}`, { method: 'PATCH', credentials: 'include', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ status, admin_reason: adminReason }) });
+    showAdminToast('تم تحديث الطلب');
+}
