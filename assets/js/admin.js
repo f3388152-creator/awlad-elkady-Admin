@@ -5,6 +5,12 @@ function sanitizeFormValue(value, maxLength = 5000) {
     return String(value ?? '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').trim().slice(0, maxLength);
 }
 
+function escapeAdminHtml(value, maxLength = 5000) {
+    return sanitizeFormValue(value, maxLength).replace(/[&<>"']/g, character => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[character]));
+}
+
 function sanitizeFormData(data) {
     if (!data || typeof data !== 'object' || Array.isArray(data)) return data;
     return Object.fromEntries(Object.entries(data).map(([key, value]) => [
@@ -899,14 +905,14 @@ function renderComplaints(complaints) {
     container.innerHTML = complaints.map(c => `
         <div class="complaint-card glass-panel" onclick="openComplaintModal(${c.id})">
             <div class="flex-between">
-                <strong class="text-primary font-bold text-lg">${c.client}</strong>
+                <strong class="text-primary font-bold text-lg">${escapeAdminHtml(c.client, 120)}</strong>
                 <span class="badge ${c.status === 'new' ? 'badge-new' : 'badge-resolved'}">${c.status === 'new' ? 'جديد (معلق)' : 'تم الحل'}</span>
             </div>
-            <span class="text-subtle text-sm">${c.date}</span>
-            <p class="text-subtle text-sm mt-1" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${c.text}</p>
+            <span class="text-subtle text-sm">${escapeAdminHtml(c.date, 40)}</span>
+            <p class="text-subtle text-sm mt-1" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${escapeAdminHtml(c.text, 1000)}</p>
             <div class="flex-between mt-2 pt-2 border-b">
                 <span class="text-primary font-bold text-sm">عرض التفاصيل <i class="fa-solid fa-arrow-left"></i></span>
-                <span class="text-subtle text-sm" dir="ltr">${c.phone}</span>
+                <span class="text-subtle text-sm" dir="ltr">${escapeAdminHtml(c.phone, 30)}</span>
             </div>
         </div>
     `).join('');
@@ -936,7 +942,9 @@ function applyPermissionVisibility() {
     const isOwner = window.ADMIN_ACCESS.owner === true || window.ADMIN_ACCESS.admin === true;
     const permissions = window.ADMIN_ACCESS?.permissions || {};
     const allowed = key => isOwner || permissions['*'] === true || permissions[key] === true || permissions[key.replace('view_', '') + '.view'] === true;
-    document.querySelectorAll('[data-permission]').forEach(element => { if (!allowed(element.dataset.permission)) element.classList.add('hidden'); });
+    document.querySelectorAll('[data-permission]').forEach(element => {
+        element.classList.toggle('hidden', !allowed(element.dataset.permission));
+    });
     const firstVisible = [...document.querySelectorAll('.sidebar .nav-item')].find(item => !item.classList.contains('hidden'));
     if (firstVisible && !document.querySelector('.sidebar .nav-item.active:not(.hidden)')) firstVisible.click();
 }
@@ -1409,7 +1417,7 @@ function renderStaffAccounts() {
     if (!staffAccounts.length) { list.textContent = 'لا يوجد موظفون مضافون حتى الآن.'; return; }
     list.innerHTML = staffAccounts.map(staff => `
         <div class="card-item flex-between">
-            <div><strong class="text-primary block">${sanitizeFormValue(staff.display_name || '', 100)}</strong><span class="text-subtle text-sm">${sanitizeFormValue(staff.phone, 30)} · ${staff.is_active ? 'نشط' : 'موقوف'} · <span class="presence-dot ${staff.is_online ? 'online' : ''}"></span>${staff.is_online ? 'أونلاين' : `آخر ظهور: ${staff.last_seen_at ? new Date(staff.last_seen_at).toLocaleString('ar-EG') : 'غير مسجل'}`}</span></div>
+            <div><strong class="text-primary block">${escapeAdminHtml(staff.display_name || '', 100)}</strong><span class="text-subtle text-sm">${escapeAdminHtml(staff.phone, 30)} · ${staff.is_active ? 'نشط' : 'موقوف'} · <span class="presence-dot ${staff.is_online ? 'online' : ''}"></span>${staff.is_online ? 'أونلاين' : `آخر ظهور: ${escapeAdminHtml(staff.last_seen_at ? new Date(staff.last_seen_at).toLocaleString('ar-EG') : 'غير مسجل', 80)}`}</span></div>
             <div class="flex-align gap-2"><button type="button" class="btn btn-ghost btn-sm" data-edit-staff="${staff.id}"><i class="fa-solid fa-pen"></i> تعديل</button><button type="button" class="btn btn-danger-ghost btn-sm" data-delete-staff="${staff.id}"><i class="fa-solid fa-trash"></i></button></div>
         </div>`).join('');
 }

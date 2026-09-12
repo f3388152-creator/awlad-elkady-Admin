@@ -20,6 +20,11 @@ create table if not exists public.socials (
   sort_order integer not null default 1
 );
 
+alter table public.socials add column if not exists icon text not null default 'fa-solid fa-link';
+alter table public.socials add column if not exists link text not null default '';
+alter table public.socials add column if not exists is_visible boolean not null default true;
+alter table public.socials add column if not exists sort_order integer not null default 1;
+
 alter table public.faqs enable row level security;
 alter table public.socials enable row level security;
 

@@ -223,22 +223,22 @@
                         </div>
                         <!-- Settings Sidebar Sub-navigation -->
                         <div class="settings-sidebar">
-                            <button class="settings-tab-btn active" data-tab="tab-identity">
+                            <button class="settings-tab-btn active" data-tab="tab-identity" data-permission="edit_identity_seo">
                                 <i class="fa-solid fa-id-card"></i> 1. الهوية والـ SEO
                             </button>
-                            <button class="settings-tab-btn" data-tab="tab-content">
+                            <button class="settings-tab-btn" data-tab="tab-content" data-permission="edit_hero_catalog">
                                 <i class="fa-solid fa-heading"></i> 2. محتوى الصفحة
                             </button>
-                            <button class="settings-tab-btn" data-tab="tab-contact">
+                            <button class="settings-tab-btn" data-tab="tab-contact" data-permission="edit_contact_social">
                                 <i class="fa-solid fa-share-nodes"></i> 3. روابط التواصل
                             </button>
-                            <button class="settings-tab-btn" data-tab="tab-faq">
+                            <button class="settings-tab-btn" data-tab="tab-faq" data-permission="edit_faq">
                                 <i class="fa-solid fa-circle-question"></i> 4. الأسئلة الشائعة
                             </button>
-                            <button class="settings-tab-btn" data-tab="tab-shipping">
+                            <button class="settings-tab-btn" data-tab="tab-shipping" data-permission="edit_shipping">
                                 <i class="fa-solid fa-truck-fast"></i> 5. الشحن المخصص
                             </button>
-                            <button class="settings-tab-btn" data-tab="tab-maintenance">
+                            <button class="settings-tab-btn" data-tab="tab-maintenance" data-permission="edit_maintenance">
                                 <i class="fa-solid fa-palette"></i> 6. الصيانة والألوان
                             </button>
                             <button class="settings-tab-btn" data-tab="tab-staff" data-permission="manage_staff">
@@ -250,7 +250,7 @@
                         <div class="settings-content custom-scroll">
 
                             <!-- TAB 1: IDENTITY & SEO -->
-                            <div id="tab-identity" class="tab-content-item active">
+                            <div id="tab-identity" class="tab-content-item active" data-permission="edit_identity_seo">
                                 <h3 class="tab-heading"><i class="fa-solid fa-id-card text-primary"></i> الهوية البصرية
                                     والـ SEO</h3>
                                 <div class="form-grid cols-2 mb-3">
@@ -291,7 +291,7 @@
                             </div>
 
                             <!-- TAB 2: PAGE CONTENT & MARQUEE -->
-                            <div id="tab-content" class="tab-content-item">
+                            <div id="tab-content" class="tab-content-item" data-permission="edit_hero_catalog">
                                 <h3 class="tab-heading"><i class="fa-solid fa-heading text-primary"></i> محتوى الشريط
                                     الإعلاني والهيرو</h3>
                                 <div class="form-group mb-3">
@@ -321,7 +321,7 @@
                             </div>
 
                             <!-- TAB 3: CONTACT & SOCIAL LINKS -->
-                            <div id="tab-contact" class="tab-content-item">
+                            <div id="tab-contact" class="tab-content-item" data-permission="edit_contact_social">
                                 <div class="legacy-contact-fields form-grid cols-2 mb-4">
                                     <div class="form-group"><label for="setting-address">عنوان المعرض</label><input type="text" class="form-control" id="setting-address" placeholder="شارع الإصلاح الزراعي - كوم أمبو - أسوان"></div>
                                     <div class="form-group"><label for="setting-footer-phone">رقم الهاتف</label><input type="tel" class="form-control" id="setting-footer-phone" placeholder="01118060702"></div>
@@ -341,7 +341,7 @@
                             </div>
 
                             <!-- TAB 4: FAQ MANAGEMENT -->
-                            <div id="tab-faq" class="tab-content-item">
+                            <div id="tab-faq" class="tab-content-item" data-permission="edit_faq">
                                 <div class="flex-between mb-3">
                                     <h3 class="tab-heading mb-0"><i
                                             class="fa-solid fa-circle-question text-primary"></i> إدارة الأسئلة الشائعة
@@ -355,7 +355,7 @@
                             </div>
 
                             <!-- TAB 5: CUSTOM SHIPPING SETTINGS -->
-                            <div id="tab-shipping" class="tab-content-item">
+                            <div id="tab-shipping" class="tab-content-item" data-permission="edit_shipping">
                                 <h3 class="tab-heading"><i class="fa-solid fa-truck-fast text-primary"></i> إعدادات Bosta والتتبع</h3>
                                 <div class="form-grid cols-2 mb-4 legacy-bosta-fields">
                                     <div class="form-group"><label for="setting-bosta-webhook">رابط Webhook</label><input type="url" class="form-control" id="setting-bosta-webhook" placeholder="https://..."></div>
@@ -394,7 +394,7 @@
                             </div>
 
                             <!-- TAB 6: MAINTENANCE MODE -->
-                            <div id="tab-maintenance" class="tab-content-item">
+                            <div id="tab-maintenance" class="tab-content-item" data-permission="edit_maintenance">
                                 <h3 class="tab-heading"><i class="fa-solid fa-palette text-primary"></i> وضع الصيانة
                                 </h3>
 
@@ -423,7 +423,7 @@
                             </div>
 
                             <!-- TAB 7: STAFF ACCOUNTS -->
-                            <div id="tab-staff" class="tab-content-item">
+                            <div id="tab-staff" class="tab-content-item" data-permission="manage_staff">
                                 <div class="mb-3">
                                     <h3 class="tab-heading mb-1"><i class="fa-solid fa-users-gear text-primary"></i> إدارة الموظفين والصلاحيات</h3>
                                     <p class="text-subtle text-sm">أضف الموظف وحدد صلاحياته من نفس صفحة الإعدادات.</p>
@@ -721,12 +721,12 @@
                 </div>
             </div>
             <div class="modal-footer flex-between">
-                <button class="btn btn-whatsapp" id="whatsapp-direct-btn"><i class="fa-brands fa-whatsapp"></i> تواصل
+                <button class="btn btn-whatsapp" id="whatsapp-direct-btn" data-permission="view_complaints"><i class="fa-brands fa-whatsapp"></i> تواصل
                     عبر واتساب</button>
                 <div class="flex-align gap-2">
-                    <button class="btn btn-ghost" id="save-complaint-btn"><i class="fa-solid fa-floppy-disk"></i> حفظ التعديل</button>
-                    <button class="btn btn-danger-ghost" id="delete-complaint-btn"><i class="fa-solid fa-trash"></i> حذف</button>
-                    <button class="btn btn-emerald" id="resolve-complaint-btn"><i class="fa-solid fa-check"></i> تم الحل</button>
+                    <button class="btn btn-ghost" id="save-complaint-btn" data-permission="update_complaint_status"><i class="fa-solid fa-floppy-disk"></i> حفظ التعديل</button>
+                    <button class="btn btn-danger-ghost" id="delete-complaint-btn" data-permission="archive_complaints"><i class="fa-solid fa-trash"></i> حذف</button>
+                    <button class="btn btn-emerald" id="resolve-complaint-btn" data-permission="update_complaint_status"><i class="fa-solid fa-check"></i> تم الحل</button>
                 </div>
             </div>
         </div>
