@@ -21,7 +21,7 @@ function sanitizeFormData(data) {
 
 window.sb_fetch = async (table) => {
     try {
-        const data = await Supabase.select(table, 'order=created_at.desc');
+        const data = await Supabase.select(table, table === 'site_settings' ? 'id=eq.1' : 'order=created_at.desc');
         // Schema Adapter map
         if (table === 'products') return data.map(p => ({id: p.id, name: p.name, sku: p.sku, price: p.price, salePrice: p.sale_price, stock: p.stock, stockThreshold: p.stock_threshold, bostaSize: p.bosta_size, category: p.category || '', is_active: p.is_active !== false, bestseller: p.is_bestseller, desc: p.description, images: p.images || [], sizes: Array.isArray(p.sizes) ? p.sizes : []}));
         if (table === 'orders') return data.map(o => ({id: String(o.id), status: o.status, date: new Date(o.created_at).toLocaleDateString('ar-EG'), name: o.customer_name, phone: o.customer_phone, secondPhone: o.customer_second_phone, gov: o.governorate, area: o.area, address: o.address, subtotal: o.subtotal || 0, shipping: o.shipping_fee || 0, notes: o.notes, items: o.items || [], tracking_number: o.tracking_number || '—'}));
@@ -63,6 +63,9 @@ window.sb_upload = async (file) => await Supabase.upload(file);document.addEvent
     initProductsAndCategories();
     initComplaintsSystem();
     initSiteSettings();
+    document.querySelector('.settings-tab-btn[data-tab="tab-contact"]')?.addEventListener('click', () => {
+        if (adminStoreMap) setTimeout(() => adminStoreMap.invalidateSize(), 100);
+    });
 
     // Polling Mechanism (Sync every 15s)
     setInterval(async () => {
@@ -298,12 +301,13 @@ function initNavigation() {
             btn.classList.add('active');
 
             const target = btn.getAttribute('data-tab');
-            if (target) {
-                tabContentItems.forEach(t => t.classList.remove('active'));
-                const activeTab = document.getElementById(target);
-                if (activeTab) activeTab.classList.add('active');
-            }
-        });
+                if (target) {
+                    tabContentItems.forEach(t => t.classList.remove('active'));
+                    const activeTab = document.getElementById(target);
+                    if (activeTab) activeTab.classList.add('active');
+                    if (target === 'tab-contact' && adminStoreMap) setTimeout(() => adminStoreMap.invalidateSize(), 100);
+                }
+            });
     });
 }
 
@@ -1026,10 +1030,13 @@ function initAdminStoreMap() {
 
 
 async function initSiteSettings() {
-    sampleSocials = await sb_fetch('socials') || [];
-    sampleFaqs = await sb_fetch('faqs') || [];
-
-    const settingsArr = await sb_fetch('site_settings');
+    const loading = document.getElementById('settings-loading');
+    if (loading) loading.removeAttribute('hidden');
+    try {
+    const settingsPromise = sb_fetch('site_settings');
+    const [settingsArr, socialsArr, faqsArr] = await Promise.all([settingsPromise, sb_fetch('socials'), sb_fetch('faqs')]);
+    sampleSocials = socialsArr || [];
+    sampleFaqs = faqsArr || [];
     if (settingsArr && settingsArr.length > 0) {
         const settings = settingsArr[0];
         const setValue = (id, value) => { const field = document.getElementById(id); if (field && value != null) field.value = value; };
@@ -1248,6 +1255,12 @@ async function initSiteSettings() {
             maintenance_message: document.getElementById('maintenance-message')?.value?.trim() || null
         });
     });
+    } catch (error) {
+        console.error('[admin-settings]', error);
+        showAdminToast('تعذر تحميل إعدادات الموقع');
+    } finally {
+        document.getElementById('settings-loading')?.setAttribute('hidden', '');
+    }
 }
 
 let settingsDirty = false;

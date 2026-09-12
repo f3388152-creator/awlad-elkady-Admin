@@ -104,5 +104,6 @@ module.exports = async (req, res) => {
   if (!method) return res.status(400).json({ error: 'Unsupported action' });
   if (method !== 'GET') headers.Prefer = action === 'insertReturn' ? 'return=representation' : 'return=minimal';
   const upstream = await fetch(`${SUPABASE_URL}${path}`, { method, headers, body: method === 'GET' ? undefined : JSON.stringify(req.body || {}) });
+  if (table === 'site_settings' && method === 'GET') res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
   const text = await upstream.text(); res.status(upstream.status); if (text) res.send(text); else res.end();
 };

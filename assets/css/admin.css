@@ -135,4 +135,6 @@ textarea {
 .admin-toast.visible { opacity: 1; transform: translateY(0); }
 @media (max-width: 600px) { .permission-card-grid { grid-template-columns: 1fr; } .settings-save-bar { right: .75rem; left: .75rem; transform: none; justify-content: space-between; } .settings-save-bar span { font-size: .74rem; } .staff-card-identity { max-width: 65%; } }
 
-.store-map{width:100%;min-height:260px;margin-top:12px;border:1px solid var(--clr-border);border-radius:10px;overflow:hidden;background:#e8eee9}.store-map .leaflet-control-attribution{font-size:10px}
+.store-map{width:100%;min-height:260px;margin-top:12px;border:1px solid var(--clr-border);border-radius:10px;overflow:hidden;background:#e8eee9}.store-map .leaflet-control-attribution{font-size:10px}#admin-store-map{width:100%;height:350px;min-height:350px;display:block;position:relative}
+
+.settings-loading{display:flex;align-items:center;gap:.55rem;margin-bottom:1rem;padding:.65rem .8rem;border:1px solid var(--clr-border);border-radius:8px;background:var(--clr-primary-light);color:var(--clr-primary);font-weight:700}.settings-loading[hidden]{display:none}.settings-spinner{width:16px;height:16px;border:2px solid rgba(26,107,60,.2);border-top-color:var(--clr-primary);border-radius:50%;animation:settings-spin .7s linear infinite}@keyframes settings-spin{to{transform:rotate(360deg)}}
