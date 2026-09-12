@@ -21,6 +21,7 @@ function sanitizeFormData(data) {
 
 window.sb_fetch = async (table) => {
     try {
+        console.log('[admin-fetch] جلب', table);
         const data = await Supabase.select(table, table === 'site_settings' ? 'id=eq.1' : 'order=created_at.desc');
         // Schema Adapter map
         if (table === 'products') return data.map(p => ({id: p.id, name: p.name, sku: p.sku, price: p.price, salePrice: p.sale_price, stock: p.stock, stockThreshold: p.stock_threshold, bostaSize: p.bosta_size, category: p.category || '', is_active: p.is_active !== false, bestseller: p.is_bestseller, desc: p.description, images: p.images || [], sizes: Array.isArray(p.sizes) ? p.sizes : []}));
@@ -29,7 +30,10 @@ window.sb_fetch = async (table) => {
         if (table === 'site_settings' && data.length) return [{id: data[0].id, q: '', a: '', ...data[0]}];
         if (table === 'faqs' || table === 'socials') return data.map(d => ({...d, visible: d.is_visible !== false}));
         return data;
-    } catch(e) { console.error(e); return []; }
+    } catch(e) {
+        console.error(`[admin-fetch] فشل جلب الجدول ${table}`, e);
+        return [];
+    }
 };
 
 window.sb_insert = async (table, data) => {
@@ -62,7 +66,8 @@ window.sb_upload = async (file) => await Supabase.upload(file);document.addEvent
     initOrdersSystem();
     initProductsAndCategories();
     initComplaintsSystem();
-    initSiteSettings();
+    // Settings need a valid session; initPasswordAuth triggers initSiteSettings once auth is confirmed.
+    if (window.ADMIN_ACCESS) initSiteSettings();
     document.querySelector('.settings-tab-btn[data-tab="tab-contact"]')?.addEventListener('click', () => {
         if (adminStoreMap) setTimeout(() => adminStoreMap.invalidateSize(), 100);
     });
@@ -105,7 +110,8 @@ function initPasswordAuth() {
             window.ADMIN_ACCESS = { admin: details.admin === true, owner: details.admin === true, permissions: details.permissions || (details.admin ? { '*': true } : {}) };
             applyPermissionVisibility();
             if (details.admin === true) initStaffAccounts();
-        }).catch(() => {});
+            initSiteSettings();
+        }).catch(error => { console.info('[admin-auth] لا توجد جلسة سابقة صالحة', error?.message || error); });
         loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const password = pwdInput ? pwdInput.value : '';
@@ -130,6 +136,7 @@ function initPasswordAuth() {
                 localStorage.setItem('admin_authenticated', 'true');
                 window.ADMIN_ACCESS = { admin: details.admin === true, owner: details.admin === true, permissions: details.permissions || (details.admin ? { '*': true } : {}) };
                 applyPermissionVisibility();
+                initSiteSettings();
                 if (!details.admin) fetch('/api/admin?action=presence', { method: 'POST', credentials: 'include' });
                 if (details.admin === true) {
                     document.getElementById('open-bulk-import')?.classList.remove('hidden');
@@ -1029,46 +1036,70 @@ function initAdminStoreMap() {
 }
 
 
+let siteSettingsLoaded = false;
+const SETTINGS_FIELD_MAP = {
+    'setting-site-name': 'site_name',
+    'setting-brand-name': 'brand_name',
+    'setting-seo-desc': 'seo_description',
+    'setting-marquee-text': 'marquee_text',
+    'setting-hero-title': 'hero_title',
+    'setting-logo-header': 'logo_header',
+    'setting-logo-footer': 'logo_footer',
+    'setting-marquee-behavior': 'marquee_behavior',
+    'setting-marquee-end-date': 'marquee_end_date',
+    'setting-map-lat': 'map_latitude',
+    'setting-map-lng': 'map_longitude',
+    'maintenance-message': 'maintenance_message',
+    'custom-shipping-type': 'shipping_type',
+    'custom-shipping-flat-rate': 'shipping_flat_rate',
+    'setting-address': 'address',
+    'setting-footer-phone': 'footer_phone',
+    'setting-whatsapp': 'whatsapp_number',
+    'setting-bosta-webhook': 'bosta_webhook',
+    'setting-bosta-payment': 'bosta_payment_type',
+    'setting-bosta-size': 'bosta_default_size'
+};
+
+function fillSiteSettingFields(settings = {}) {
+    const missing = [];
+    Object.entries(SETTINGS_FIELD_MAP).forEach(([id, key]) => {
+        const field = document.getElementById(id);
+        if (!field) { missing.push(`${id} (${key})`); return; }
+        if (settings[key] != null) field.value = settings[key];
+    });
+    const missingToggles = [];
+    [['custom-shipping-master-toggle', 'shipping_custom'], ['maintenance-mode-toggle', 'maintenance_mode'], ['setting-footer-phone-visible', 'footer_phone_visible'], ['setting-whatsapp-visible', 'whatsapp_visible']].forEach(([id, key]) => {
+        const field = document.getElementById(id);
+        if (!field) { missingToggles.push(`${id} (${key})`); return; }
+        if (settings[key] != null) field.checked = settings[key] === true;
+    });
+    const logoHeader = document.getElementById('setting-logo-header');
+    const logoHeaderPreview = document.getElementById('setting-logo-header-preview');
+    if (logoHeader?.value && logoHeaderPreview) logoHeaderPreview.src = logoHeader.value;
+    const logoFooter = document.getElementById('setting-logo-footer');
+    const logoFooterPreview = document.getElementById('setting-logo-footer-preview');
+    if (logoFooter?.value && logoFooterPreview) logoFooterPreview.src = logoFooter.value;
+    if (missing.length) console.warn('[admin-settings] حقول غير موجودة في HTML:', missing.join(' | '));
+    if (missingToggles.length) console.warn('[admin-settings] مفاتيح غير موجودة في HTML:', missingToggles.join(' | '));
+    const filled = Object.values(SETTINGS_FIELD_MAP).filter(key => settings[key] != null).length;
+    console.info(`[admin-settings] تم تعبئة ${filled} حقل من إعدادات الموقع`);
+}
+
 async function initSiteSettings() {
+    if (siteSettingsLoaded) { console.info('[admin-settings] تم التحميل مسبقاً، تخطي الطلب المكرر'); return; }
+    siteSettingsLoaded = true;
     const loading = document.getElementById('settings-loading');
     if (loading) loading.removeAttribute('hidden');
     try {
-    const settingsPromise = sb_fetch('site_settings');
-    const [settingsArr, socialsArr, faqsArr] = await Promise.all([settingsPromise, sb_fetch('socials'), sb_fetch('faqs')]);
+    console.info('[admin-settings] بدء جلب إعدادات الموقع...');
+    const [settingsArr, socialsArr, faqsArr] = await Promise.all([sb_fetch('site_settings'), sb_fetch('socials'), sb_fetch('faqs')]);
     sampleSocials = socialsArr || [];
     sampleFaqs = faqsArr || [];
+    console.info(`[admin-settings] site_settings=${settingsArr?.length || 0} socials=${sampleSocials.length} faqs=${sampleFaqs.length}`);
     if (settingsArr && settingsArr.length > 0) {
-        const settings = settingsArr[0];
-        const setValue = (id, value) => { const field = document.getElementById(id); if (field && value != null) field.value = value; };
-        setValue('setting-site-name', settings.site_name); setValue('setting-brand-name', settings.brand_name); setValue('setting-seo-desc', settings.seo_description); setValue('setting-marquee-text', settings.marquee_text); setValue('setting-hero-title', settings.hero_title);
-
-        // Populating Identity
-        if (settings.logo_header) {
-            document.getElementById('setting-logo-header').value = settings.logo_header;
-            document.getElementById('setting-logo-header-preview').src = settings.logo_header;
-        }
-        if (settings.logo_footer) {
-            document.getElementById('setting-logo-footer').value = settings.logo_footer;
-            document.getElementById('setting-logo-footer-preview').src = settings.logo_footer;
-        }
-
-        // Populating Content
-        if (settings.marquee_behavior) document.getElementById('setting-marquee-behavior').value = settings.marquee_behavior;
-        if (settings.marquee_end_date) document.getElementById('setting-marquee-end-date').value = settings.marquee_end_date;
-
-        // Populating Toggles
-        if (settings.shipping_custom != null) document.getElementById('custom-shipping-master-toggle').checked = settings.shipping_custom === true;
-        if (settings.maintenance_mode != null) document.getElementById('maintenance-mode-toggle').checked = settings.maintenance_mode === true;
-        if (document.getElementById('setting-footer-phone-visible')) document.getElementById('setting-footer-phone-visible').checked = settings.footer_phone_visible !== false;
-        if (document.getElementById('setting-whatsapp-visible')) document.getElementById('setting-whatsapp-visible').checked = settings.whatsapp_visible !== false;
-        setValue('setting-map-lat', settings.map_latitude); setValue('setting-map-lng', settings.map_longitude);
-        if (settings.maintenance_message != null) setValue('maintenance-message', settings.maintenance_message);
-        if (settings.shipping_type != null) setValue('custom-shipping-type', settings.shipping_type);
-        if (settings.shipping_flat_rate != null) setValue('custom-shipping-flat-rate', settings.shipping_flat_rate);
-        ['address', 'footer_phone', 'whatsapp_number', 'bosta_webhook', 'bosta_payment_type', 'bosta_default_size'].forEach(key => {
-            const field = document.getElementById({ address: 'setting-address', footer_phone: 'setting-footer-phone', whatsapp_number: 'setting-whatsapp', bosta_webhook: 'setting-bosta-webhook', bosta_payment_type: 'setting-bosta-payment', bosta_default_size: 'setting-bosta-size' }[key]);
-            if (field && settings[key] != null) field.value = settings[key];
-        });
+        fillSiteSettingFields(settingsArr[0]);
+    } else {
+        console.warn('[admin-settings] لا يوجد سجل في site_settings (id=1)');
     }
 
     initAdminStoreMap();
