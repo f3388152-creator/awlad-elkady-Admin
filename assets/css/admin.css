@@ -97,3 +97,40 @@ textarea {
 		background: rgba(15,23,16,.28);
 	}
 }
+
+/* Phase 2 staff and save UX */
+.form-group,
+.form-grid,
+.settings-content,
+.staff-inline-form { min-width: 0; }
+.password-field { position: relative; display: flex; align-items: center; }
+.password-field .form-control { padding-left: 2.75rem; }
+.password-toggle { position: absolute; left: .65rem; z-index: 1; }
+.switch-toggle-lg { display: inline-flex; align-items: center; gap: .65rem; width: auto; height: 28px; }
+.switch-toggle-lg .slider { position: relative; inset: auto; display: block; width: 48px; height: 26px; flex: 0 0 48px; }
+.switch-toggle-lg .slider:before { width: 20px; height: 20px; }
+.switch-toggle-lg input:checked + .slider:before { transform: translateX(22px); }
+.switch-label { font-weight: 700; color: var(--clr-text-subtle); }
+.staff-avatar-preview { margin-top: .5rem; }
+.staff-avatar,
+.staff-avatar-fallback { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; display: inline-flex; align-items: center; justify-content: center; background: var(--clr-primary-light); color: var(--clr-primary); flex: 0 0 44px; }
+.staff-card-identity { display: flex; align-items: center; gap: .75rem; min-width: 0; }
+.staff-card-identity > div { min-width: 0; }
+.staff-device-history { display: flex; flex-wrap: wrap; gap: .75rem 1.25rem; margin-top: .75rem; padding: .75rem 1rem; border: 1px solid var(--clr-border); border-radius: var(--radius-md); background: var(--clr-surface); color: var(--clr-text-subtle); font-size: .8rem; }
+.staff-device-history strong { color: var(--clr-primary); }
+.permission-accordion { display: grid; gap: .65rem; }
+.permission-card { border: 1px solid var(--clr-border); border-radius: var(--radius-md); background: #fff; overflow: hidden; }
+.permission-card summary { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: .85rem 1rem; cursor: pointer; list-style: none; font-weight: 800; color: var(--clr-primary); }
+.permission-card summary::-webkit-details-marker { display: none; }
+.permission-card summary small { color: var(--clr-text-subtle); font-weight: 600; }
+.permission-card[open] summary { border-bottom: 1px solid var(--clr-border); background: var(--clr-primary-light); }
+.permission-card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; padding: .75rem; }
+.permission-card-grid label { display: flex; align-items: center; gap: .5rem; min-width: 0; padding: .5rem; border: 1px solid var(--clr-border); border-radius: var(--radius-sm); font-size: .8rem; }
+.permission-card-grid input { width: 16px; height: 16px; flex: 0 0 auto; accent-color: var(--clr-primary); }
+.settings-save-bar { position: fixed; z-index: 2400; right: 50%; bottom: 1rem; transform: translateX(50%); display: flex; align-items: center; gap: 1rem; padding: .65rem .75rem .65rem 1rem; border: 1px solid var(--clr-border); border-radius: 999px; background: rgba(255,255,255,.97); box-shadow: var(--shadow-lg); }
+.settings-save-bar[hidden] { display: none; }
+.settings-save-bar span { color: var(--clr-text-subtle); font-size: .82rem; font-weight: 700; }
+.settings-save-bar span i { color: var(--clr-gold); margin-left: .35rem; }
+.admin-toast { position: fixed; z-index: 2500; left: 1rem; bottom: 1rem; padding: .75rem 1rem; border-radius: var(--radius-md); background: var(--clr-dark); color: #fff; opacity: 0; transform: translateY(12px); pointer-events: none; transition: var(--transition); }
+.admin-toast.visible { opacity: 1; transform: translateY(0); }
+@media (max-width: 600px) { .permission-card-grid { grid-template-columns: 1fr; } .settings-save-bar { right: .75rem; left: .75rem; transform: none; justify-content: space-between; } .settings-save-bar span { font-size: .74rem; } .staff-card-identity { max-width: 65%; } }

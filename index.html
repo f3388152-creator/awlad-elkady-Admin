@@ -443,8 +443,10 @@
                                     <div class="form-grid cols-2 mb-3">
                                         <div class="form-group"><label for="staff-phone">رقم الموبايل</label><input type="tel" id="staff-phone" class="form-control" inputmode="numeric" required></div>
                                         <div class="form-group"><label for="staff-name">اسم الموظف</label><input type="text" id="staff-name" class="form-control" required></div>
-                                        <div class="form-group"><label for="staff-password">كلمة السر <small>(8 حروف على الأقل عند الإضافة)</small></label><input type="password" id="staff-password" class="form-control" minlength="8"></div>
-                                        <div class="form-group"><label for="staff-active">الحالة</label><select id="staff-active" class="form-control"><option value="true">نشط</option><option value="false">موقوف</option></select></div>
+                                        <div class="form-group"><label for="staff-password">كلمة السر <small>(8 حروف على الأقل عند الإضافة)</small></label><div class="password-field"><input type="password" id="staff-password" class="form-control" minlength="8"><button type="button" class="icon-btn password-toggle" data-password-target="staff-password" aria-label="إظهار كلمة السر" title="إظهار أو إخفاء كلمة السر"><i class="fa-solid fa-eye"></i></button></div></div>
+                                        <div class="form-group"><label for="staff-role-template">قالب الوظيفة</label><select id="staff-role-template" class="form-control"><option value="custom">صلاحيات مخصصة</option><option value="customer_service">خدمة عملاء</option><option value="warehouse">إدارة مخازن</option><option value="shipping">مسؤول شحن</option><option value="content">إدارة محتوى</option></select></div>
+                                        <div class="form-group"><label for="staff-avatar-file">الصورة الشخصية</label><input type="file" id="staff-avatar-file" class="form-control" accept="image/png,image/jpeg,image/webp"><input type="hidden" id="staff-avatar-url"><div id="staff-avatar-preview" class="staff-avatar-preview" hidden></div></div>
+                                        <div class="form-group staff-status-field"><span class="form-label">حالة الموظف</span><label class="switch-toggle switch-toggle-lg"><input type="checkbox" id="staff-active" checked><span class="slider"></span><span class="switch-label">نشط</span></label></div>
                                     </div>
                                     <div class="form-group mb-3">
                                         <label>الصلاحيات</label>
@@ -453,42 +455,17 @@
                                             <button type="button" class="btn btn-ghost btn-sm" data-permission-preset="shipping">صلاحيات الشحن</button>
                                             <button type="button" class="btn btn-ghost btn-sm" data-permission-preset="products">صلاحيات المنتجات</button>
                                         </div>
-                                        <div id="staff-permissions" class="legacy-permissions-grid staff-permissions-grid">
-                                            <label><input type="checkbox" value="view_orders"> مشاهدة الطلبات</label>
-                                            <label><input type="checkbox" value="update_order_status"> تغيير حالة الطلب</label>
-                                            <label><input type="checkbox" value="edit_customer_data"> تعديل بيانات العميل</label>
-                                            <label><input type="checkbox" value="export_orders"> تصدير الطلبات</label>
-                                            <label><input type="checkbox" value="view_products"> مشاهدة المنتجات</label>
-                                            <label><input type="checkbox" value="create_products"> إضافة منتجات</label>
-                                            <label><input type="checkbox" value="edit_products_stock"> تعديل المنتجات والمخزون</label>
-                                            <label><input type="checkbox" value="archive_products"> أرشفة المنتجات</label>
-                                            <label><input type="checkbox" value="upload_product_images"> رفع صور المنتجات</label>
-                                            <label><input type="checkbox" value="view_categories"> مشاهدة الأقسام</label>
-                                            <label><input type="checkbox" value="create_categories"> إضافة الأقسام</label>
-                                            <label><input type="checkbox" value="edit_categories"> تعديل الأقسام</label>
-                                            <label><input type="checkbox" value="link_products_categories"> ربط المنتجات بالأقسام</label>
-                                            <label><input type="checkbox" value="view_complaints"> مشاهدة الشكاوى</label>
-                                            <label><input type="checkbox" value="update_complaint_status"> تغيير حالة الشكوى</label>
-                                            <label><input type="checkbox" value="archive_complaints"> أرشفة الشكاوى</label>
-                                            <label><input type="checkbox" value="view_landing_settings"> مشاهدة إعدادات الهبوط</label>
-                                            <label><input type="checkbox" value="edit_general_landing_settings"> تعديل إعدادات الهبوط العامة</label>
-                                            <label><input type="checkbox" value="edit_identity_seo"> تعديل الهوية والـSEO</label>
-                                            <label><input type="checkbox" value="edit_hero_catalog"> تعديل محتوى الهيرو والكتالوج</label>
-                                            <label><input type="checkbox" value="edit_contact_social"> تعديل التواصل والسوشيال</label>
-                                            <label><input type="checkbox" value="edit_faq"> تعديل الأسئلة الشائعة</label>
-                                            <label><input type="checkbox" value="edit_shipping"> تعديل الشحن</label>
-                                            <label><input type="checkbox" value="edit_bosta_settings"> تعديل إعدادات Bosta</label>
-                                            <label><input type="checkbox" value="edit_maintenance"> تعديل الصيانة</label>
-                                            <label><input type="checkbox" value="create_retry_bosta_shipment"> إنشاء/إعادة محاولة شحنة Bosta</label>
-                                            <label><input type="checkbox" value="confirm_packaging"> تأكيد التغليف</label>
-                                            <label><input type="checkbox" value="print_bosta_waybill"> طباعة بوليصة Bosta</label>
-                                            <label><input type="checkbox" value="request_bosta_pickup"> طلب استلام المندوب من Bosta</label>
-                                            <label><input type="checkbox" value="cancel_bosta_shipment"> إلغاء شحنة Bosta</label>
-                                            <label><input type="checkbox" value="bulk_import"> الرفع المجمع للمنتجات</label>
+                                        <div id="staff-permissions" class="permission-accordion">
+                                            <details class="permission-card" open><summary><span><i class="fa-solid fa-boxes-stacked"></i> الطلبات</span><small>4 صلاحيات</small></summary><div class="permission-card-grid"><label><input type="checkbox" value="view_orders"> مشاهدة الطلبات</label><label><input type="checkbox" value="update_order_status"> تغيير حالة الطلب</label><label><input type="checkbox" value="edit_customer_data"> تعديل بيانات العميل</label><label><input type="checkbox" value="export_orders"> تصدير الطلبات</label></div></details>
+                                            <details class="permission-card"><summary><span><i class="fa-solid fa-box-open"></i> المنتجات والأقسام</span><small>9 صلاحيات</small></summary><div class="permission-card-grid"><label><input type="checkbox" value="view_products"> مشاهدة المنتجات</label><label><input type="checkbox" value="create_products"> إضافة منتجات</label><label><input type="checkbox" value="edit_products_stock"> تعديل المنتجات والمخزون</label><label><input type="checkbox" value="archive_products"> أرشفة المنتجات</label><label><input type="checkbox" value="upload_product_images"> رفع صور المنتجات</label><label><input type="checkbox" value="view_categories"> مشاهدة الأقسام</label><label><input type="checkbox" value="create_categories"> إضافة الأقسام</label><label><input type="checkbox" value="edit_categories"> تعديل الأقسام</label><label><input type="checkbox" value="link_products_categories"> ربط المنتجات بالأقسام</label></div></details>
+                                            <details class="permission-card"><summary><span><i class="fa-solid fa-truck-fast"></i> الشحن و Bosta</span><small>7 صلاحيات</small></summary><div class="permission-card-grid"><label><input type="checkbox" value="edit_shipping"> تعديل الشحن</label><label><input type="checkbox" value="edit_bosta_settings"> تعديل إعدادات Bosta</label><label><input type="checkbox" value="create_retry_bosta_shipment"> إنشاء/إعادة محاولة شحنة Bosta</label><label><input type="checkbox" value="confirm_packaging"> تأكيد التغليف</label><label><input type="checkbox" value="print_bosta_waybill"> طباعة بوليصة Bosta</label><label><input type="checkbox" value="request_bosta_pickup"> طلب استلام المندوب من Bosta</label><label><input type="checkbox" value="cancel_bosta_shipment"> إلغاء شحنة Bosta</label></div></details>
+                                            <details class="permission-card"><summary><span><i class="fa-solid fa-headset"></i> الشكاوى</span><small>3 صلاحيات</small></summary><div class="permission-card-grid"><label><input type="checkbox" value="view_complaints"> مشاهدة الشكاوى</label><label><input type="checkbox" value="update_complaint_status"> تغيير حالة الشكوى</label><label><input type="checkbox" value="archive_complaints"> أرشفة الشكاوى</label></div></details>
+                                            <details class="permission-card"><summary><span><i class="fa-solid fa-pen-ruler"></i> المحتوى والإعدادات</span><small>9 صلاحيات</small></summary><div class="permission-card-grid"><label><input type="checkbox" value="view_landing_settings"> مشاهدة إعدادات الهبوط</label><label><input type="checkbox" value="edit_general_landing_settings"> تعديل إعدادات الهبوط العامة</label><label><input type="checkbox" value="edit_identity_seo"> تعديل الهوية والـSEO</label><label><input type="checkbox" value="edit_hero_catalog"> تعديل محتوى الهيرو والكتالوج</label><label><input type="checkbox" value="edit_contact_social"> تعديل التواصل والسوشيال</label><label><input type="checkbox" value="edit_faq"> تعديل الأسئلة الشائعة</label><label><input type="checkbox" value="edit_maintenance"> تعديل الصيانة</label><label><input type="checkbox" value="bulk_import"> الرفع المجمع للمنتجات</label></div></details>
                                         </div>
                                     </div>
-                                    <div class="flex-align gap-2"><button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> حفظ الموظف</button><button type="button" class="btn btn-ghost" id="staff-reset-btn">موظف جديد</button></div>
+                                    <div class="flex-align gap-2 staff-form-actions"><button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> حفظ الموظف</button><button type="button" class="btn btn-ghost" id="staff-reset-btn">موظف جديد</button><button type="button" class="btn btn-danger-ghost hidden" id="staff-force-logout"><i class="fa-solid fa-user-slash"></i> طرد من كل الأجهزة</button></div>
                                 </form>
+                                <div id="staff-device-history" class="staff-device-history" hidden></div>
                                 <div id="staff-list-container" class="flex-column gap-2 mt-4"></div>
                                 <div id="staff-status" class="bulk-import-status" role="status" aria-live="polite"></div>
                             </div>
@@ -769,6 +746,12 @@
             </form>
         </div>
     </div>
+
+    <div id="settings-save-bar" class="settings-save-bar" hidden>
+        <span><i class="fa-solid fa-circle-exclamation"></i> عندك تعديلات غير محفوظة</span>
+        <button type="button" class="btn btn-primary" id="settings-save-now"><i class="fa-solid fa-floppy-disk"></i> حفظ التعديلات</button>
+    </div>
+    <div id="admin-toast" class="admin-toast" role="status" aria-live="polite"></div>
 
     <script src="/assets/js/config.js" defer></script>
     <script src="/assets/js/supabase-client.js" defer></script>

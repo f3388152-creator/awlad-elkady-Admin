@@ -1012,8 +1012,11 @@ async function initSiteSettings() {
         if (settings.marquee_end_date) document.getElementById('setting-marquee-end-date').value = settings.marquee_end_date;
 
         // Populating Toggles
-        if (settings.shipping_custom) document.getElementById('custom-shipping-master-toggle').checked = true;
-        if (settings.maintenance_mode) document.getElementById('maintenance-mode-toggle').checked = true;
+        if (settings.shipping_custom != null) document.getElementById('custom-shipping-master-toggle').checked = settings.shipping_custom === true;
+        if (settings.maintenance_mode != null) document.getElementById('maintenance-mode-toggle').checked = settings.maintenance_mode === true;
+        if (settings.maintenance_message != null) setValue('maintenance-message', settings.maintenance_message);
+        if (settings.shipping_type != null) setValue('custom-shipping-type', settings.shipping_type);
+        if (settings.shipping_flat_rate != null) setValue('custom-shipping-flat-rate', settings.shipping_flat_rate);
         ['address', 'footer_phone', 'whatsapp_number', 'bosta_webhook', 'bosta_payment_type', 'bosta_default_size'].forEach(key => {
             const field = document.getElementById({ address: 'setting-address', footer_phone: 'setting-footer-phone', whatsapp_number: 'setting-whatsapp', bosta_webhook: 'setting-bosta-webhook', bosta_payment_type: 'setting-bosta-payment', bosta_default_size: 'setting-bosta-size' }[key]);
             if (field && settings[key] != null) field.value = settings[key];
@@ -1127,7 +1130,8 @@ async function initSiteSettings() {
                     btn.disabled = true;
                     btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> جاري الحفظ...`;
                     await saveFn();
-                    alert('تم حفظ البيانات بنجاح!');
+                    clearSettingsDirty();
+                    showAdminToast('تم الحفظ بنجاح');
                 } catch (err) {
                     alert('حدث خطأ أثناء الحفظ.');
                     console.error(err);
@@ -1138,6 +1142,8 @@ async function initSiteSettings() {
             });
         }
     };
+
+    initSettingsSaveBar();
 
     wrapSaveBtn('save-identity-btn', async () => {
         await sb_update('site_settings', 1, {
@@ -1182,6 +1188,35 @@ async function initSiteSettings() {
             maintenance_mode: document.getElementById('maintenance-mode-toggle')?.checked || false,
             maintenance_message: document.getElementById('maintenance-message')?.value?.trim() || null
         });
+    });
+}
+
+let settingsDirty = false;
+function showAdminToast(message) {
+    const toast = document.getElementById('admin-toast');
+    if (!toast) return;
+    toast.textContent = message;
+    toast.classList.add('visible');
+    clearTimeout(showAdminToast.timer);
+    showAdminToast.timer = setTimeout(() => toast.classList.remove('visible'), 2600);
+}
+function markSettingsDirty() {
+    settingsDirty = true;
+    document.getElementById('settings-save-bar')?.removeAttribute('hidden');
+}
+function clearSettingsDirty() {
+    settingsDirty = false;
+    document.getElementById('settings-save-bar')?.setAttribute('hidden', '');
+}
+function initSettingsSaveBar() {
+    const content = document.querySelector('.settings-content');
+    content?.addEventListener('input', markSettingsDirty);
+    content?.addEventListener('change', markSettingsDirty);
+    document.getElementById('settings-save-now')?.addEventListener('click', async () => {
+        const active = content?.querySelector('.tab-content-item.active');
+        const button = active?.querySelector('button[id^="save-"]');
+        if (button) button.click();
+        else if (settingsDirty) { clearSettingsDirty(); showAdminToast('تم الحفظ بنجاح'); }
     });
 }
 
@@ -1448,7 +1483,7 @@ function renderStaffAccounts() {
     if (!staffAccounts.length) { list.textContent = 'لا يوجد موظفون مضافون حتى الآن.'; return; }
     list.innerHTML = staffAccounts.map(staff => `
         <div class="card-item flex-between">
-            <div><strong class="text-primary block">${escapeAdminHtml(staff.display_name || '', 100)}</strong><span class="text-subtle text-sm">${escapeAdminHtml(staff.phone, 30)} · ${staff.is_active ? 'نشط' : 'موقوف'} · <span class="presence-dot ${staff.is_online ? 'online' : ''}"></span>${staff.is_online ? 'أونلاين' : `آخر ظهور: ${escapeAdminHtml(staff.last_seen_at ? new Date(staff.last_seen_at).toLocaleString('ar-EG') : 'غير مسجل', 80)}`}</span></div>
+            <div class="staff-card-identity">${staff.avatar_url ? `<img class="staff-avatar" src="${escapeAdminHtml(staff.avatar_url, 500)}" alt="">` : '<span class="staff-avatar staff-avatar-fallback"><i class="fa-solid fa-user"></i></span>'}<div><strong class="text-primary block">${escapeAdminHtml(staff.display_name || '', 100)}</strong><span class="text-subtle text-sm">${escapeAdminHtml(staff.phone, 30)} · ${staff.is_active ? 'نشط' : 'موقوف'} · <span class="presence-dot ${staff.is_online ? 'online' : ''}"></span>${staff.is_online ? 'أونلاين' : `آخر ظهور: ${escapeAdminHtml(staff.last_seen_at ? new Date(staff.last_seen_at).toLocaleString('ar-EG') : 'غير مسجل', 80)}`}</span></div></div>
             <div class="flex-align gap-2"><button type="button" class="btn btn-ghost btn-sm" data-edit-staff="${staff.id}"><i class="fa-solid fa-pen"></i> تعديل</button><button type="button" class="btn btn-danger-ghost btn-sm" data-delete-staff="${staff.id}"><i class="fa-solid fa-trash"></i></button></div>
         </div>`).join('');
 }
@@ -1456,7 +1491,12 @@ function renderStaffAccounts() {
 function resetStaffForm() {
     document.getElementById('staff-form')?.reset();
     document.getElementById('staff-edit-id').value = '';
-    document.getElementById('staff-active').value = 'true';
+    document.getElementById('staff-active').checked = true;
+    document.getElementById('staff-role-template').value = 'custom';
+    document.getElementById('staff-avatar-url').value = '';
+    document.getElementById('staff-avatar-preview').hidden = true;
+    document.getElementById('staff-force-logout').classList.add('hidden');
+    document.getElementById('staff-device-history').hidden = true;
     document.querySelectorAll('#staff-permissions input[type="checkbox"]').forEach(input => { input.checked = false; });
 }
 
@@ -1465,7 +1505,16 @@ function fillStaffForm(staff) {
     document.getElementById('staff-phone').value = staff?.phone || '';
     document.getElementById('staff-name').value = staff?.display_name || '';
     document.getElementById('staff-password').value = '';
-    document.getElementById('staff-active').value = staff?.is_active === false ? 'false' : 'true';
+    document.getElementById('staff-active').checked = staff?.is_active !== false;
+    document.getElementById('staff-role-template').value = 'custom';
+    document.getElementById('staff-avatar-url').value = staff?.avatar_url || '';
+    const preview = document.getElementById('staff-avatar-preview');
+    preview.hidden = !staff?.avatar_url;
+    preview.innerHTML = staff?.avatar_url ? `<img class="staff-avatar" src="${escapeAdminHtml(staff.avatar_url, 500)}" alt="">` : '';
+    document.getElementById('staff-force-logout').classList.remove('hidden');
+    const deviceHistory = document.getElementById('staff-device-history');
+    deviceHistory.hidden = false;
+    deviceHistory.innerHTML = `<strong><i class="fa-solid fa-shield-halved"></i> آخر نشاط أمني</strong><span>آخر دخول: ${escapeAdminHtml(staff.last_login_at ? new Date(staff.last_login_at).toLocaleString('ar-EG') : 'غير مسجل', 100)}</span><span>الجهاز: ${escapeAdminHtml(staff.last_user_agent || 'غير مسجل', 500)}</span>`;
     const permissions = staff?.permissions && typeof staff.permissions === 'object' ? Object.keys(staff.permissions).filter(key => staff.permissions[key]) : (Array.isArray(staff?.permissions) ? staff.permissions : []);
     document.querySelectorAll('#staff-permissions input[type="checkbox"]').forEach(input => { input.checked = permissions.includes(input.value); });
     document.getElementById('tab-staff')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1481,6 +1530,18 @@ async function initStaffAccounts() {
         const keys = type === 'all' ? null : type === 'shipping' ? ['edit_shipping','edit_bosta_settings','create_retry_bosta_shipment','confirm_packaging','print_bosta_waybill','request_bosta_pickup','cancel_bosta_shipment'] : ['view_products','create_products','edit_products_stock','archive_products','upload_product_images'];
         document.querySelectorAll('#staff-permissions input[type="checkbox"]').forEach(input => { input.checked = keys ? keys.includes(input.value) : true; });
     }));
+    document.querySelectorAll('.permission-card summary').forEach(summary => summary.addEventListener('click', () => markSettingsDirty()));
+    document.getElementById('staff-role-template')?.addEventListener('change', applyStaffRoleTemplate);
+    document.getElementById('staff-active')?.addEventListener('change', event => { const label = event.target.closest('.switch-toggle')?.querySelector('.switch-label'); if (label) label.textContent = event.target.checked ? 'نشط' : 'موقوف'; });
+    document.querySelectorAll('.password-toggle').forEach(button => button.addEventListener('click', () => {
+        const input = document.getElementById(button.dataset.passwordTarget);
+        if (!input) return;
+        input.type = input.type === 'password' ? 'text' : 'password';
+        button.querySelector('i')?.classList.toggle('fa-eye-slash', input.type === 'text');
+        button.querySelector('i')?.classList.toggle('fa-eye', input.type === 'password');
+    }));
+    document.getElementById('staff-avatar-file')?.addEventListener('change', previewStaffAvatar);
+    document.getElementById('staff-force-logout')?.addEventListener('click', forceLogoutSelectedStaff);
     document.getElementById('staff-reset-btn')?.addEventListener('click', resetStaffForm);
     document.getElementById('staff-list-container')?.addEventListener('click', event => {
         const edit = event.target.closest('[data-edit-staff]');
@@ -1494,14 +1555,51 @@ async function initStaffAccounts() {
 async function saveStaffAccount(event) {
     event.preventDefault();
     const id = document.getElementById('staff-edit-id').value;
+    try { await uploadStaffAvatar(); } catch (error) { document.getElementById('staff-status').textContent = error.message || 'تعذر رفع الصورة الشخصية.'; return; }
     const permissions = Object.fromEntries([...document.querySelectorAll('#staff-permissions input[type="checkbox"]:checked')].map(input => [input.value, true]));
-    const payload = { phone: sanitizeFormValue(document.getElementById('staff-phone').value, 30), display_name: sanitizeFormValue(document.getElementById('staff-name').value, 100), permissions, is_active: document.getElementById('staff-active').value === 'true' };
+    const payload = { phone: sanitizeFormValue(document.getElementById('staff-phone').value, 30), display_name: sanitizeFormValue(document.getElementById('staff-name').value, 100), permissions, avatar_url: document.getElementById('staff-avatar-url').value || null, is_active: document.getElementById('staff-active').checked };
     const password = document.getElementById('staff-password').value;
     if (password) payload.password = password;
     if (!id && !password) { document.getElementById('staff-status').textContent = 'اكتب كلمة سر لا تقل عن 8 حروف عند إضافة موظف.'; return; }
     const response = await fetch(`/api/admin?action=staff${id ? `&id=${encodeURIComponent(id)}` : ''}`, { method: id ? 'PATCH' : 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     if (!response.ok) { const error = await response.json().catch(() => ({})); document.getElementById('staff-status').textContent = error.error || 'تعذر حفظ بيانات الموظف'; return; }
-    staffAccounts = await fetchStaffAccounts(); renderStaffAccounts(); resetStaffForm(); document.getElementById('staff-status').textContent = 'تم حفظ بيانات الموظف بنجاح.';
+    staffAccounts = await fetchStaffAccounts(); renderStaffAccounts(); resetStaffForm(); document.getElementById('staff-status').textContent = 'تم حفظ بيانات الموظف بنجاح.'; showAdminToast('تم حفظ الموظف بنجاح');
+}
+
+const STAFF_ROLE_TEMPLATES = {
+    customer_service: ['view_orders', 'update_order_status', 'edit_customer_data', 'view_complaints', 'update_complaint_status'],
+    warehouse: ['view_products', 'create_products', 'edit_products_stock', 'archive_products', 'upload_product_images', 'view_categories'],
+    shipping: ['view_orders', 'update_order_status', 'edit_shipping', 'edit_bosta_settings', 'create_retry_bosta_shipment', 'confirm_packaging', 'print_bosta_waybill', 'request_bosta_pickup', 'cancel_bosta_shipment'],
+    content: ['view_landing_settings', 'edit_general_landing_settings', 'edit_identity_seo', 'edit_hero_catalog', 'edit_contact_social', 'edit_faq', 'edit_maintenance']
+};
+function applyStaffRoleTemplate(event) {
+    const permissions = STAFF_ROLE_TEMPLATES[event.target.value];
+    if (!permissions) return;
+    document.querySelectorAll('#staff-permissions input[type="checkbox"]').forEach(input => { input.checked = permissions.includes(input.value); });
+    markSettingsDirty();
+}
+function previewStaffAvatar(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const preview = document.getElementById('staff-avatar-preview');
+    preview.hidden = false;
+    preview.innerHTML = `<img class="staff-avatar" src="${URL.createObjectURL(file)}" alt="معاينة الصورة">`;
+    markSettingsDirty();
+}
+async function uploadStaffAvatar() {
+    const file = document.getElementById('staff-avatar-file')?.files?.[0];
+    if (!file) return document.getElementById('staff-avatar-url')?.value || null;
+    const url = await sb_upload(file, 'public-assets');
+    document.getElementById('staff-avatar-url').value = url;
+    return url;
+}
+async function forceLogoutSelectedStaff() {
+    const id = document.getElementById('staff-edit-id').value;
+    if (!id || !confirm('سيتم إبطال كل جلسات الموظف الحالية. هل تريد المتابعة؟')) return;
+    const response = await fetch(`/api/admin?action=staff&operation=force-logout&id=${encodeURIComponent(id)}`, { method: 'POST', credentials: 'include' });
+    if (!response.ok) { document.getElementById('staff-status').textContent = 'تعذر طرد الموظف من الأجهزة.'; return; }
+    document.getElementById('staff-status').textContent = 'تم إبطال جلسات الموظف من كل الأجهزة.';
+    showAdminToast('تم تسجيل الخروج الإجباري');
 }
 
 async function deleteStaffAccount(id) {

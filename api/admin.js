@@ -1,5 +1,5 @@
 const { token, getSessionUser, isAdmin, isOwner, SUPABASE_URL, SUPABASE_ANON_KEY } = require('../lib/admin-session');
-const { listStaff, createStaff, updateStaff, deleteStaff, cleanStaff } = require('../lib/_staff');
+const { listStaff, createStaff, updateStaff, deleteStaff, cleanStaff, forceLogoutStaff } = require('../lib/_staff');
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
 const ADMIN_EMAIL = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
 const isAuthenticated = async req => Boolean(await getSessionUser(req));
@@ -17,15 +17,19 @@ async function authenticate(req, res) {
   if (!ownerLogin) {
     if (!SUPABASE_SERVICE_ROLE_KEY) return res.status(503).json({ error: 'Employee authentication is not configured' });
     const phone = String(employeePhone).replace(/[^0-9+]/g, '').slice(0, 20);
-    const staffResponse = await fetch(`${SUPABASE_URL}/rest/v1/staff_accounts?select=login_email,is_active,permissions&phone=eq.${encodeURIComponent(phone)}&limit=1`, { headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } });
+    const staffResponse = await fetch(`${SUPABASE_URL}/rest/v1/staff_accounts?select=login_email,is_active,permissions,id,session_version&phone=eq.${encodeURIComponent(phone)}&limit=1`, { headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } });
     const rows = staffResponse.ok ? await staffResponse.json() : []; const staff = rows[0];
     if (!staff?.is_active || !staff.login_email) return res.status(401).json({ error: 'Invalid employee credentials' }); loginEmail = staff.login_email;
     req.staffPermissions = staff.permissions || {};
+    req.staffRecord = staff;
   }
   const auth = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, { method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ email: loginEmail, password }) });
   const data = await auth.json(); if (!auth.ok || !data?.access_token) return res.status(401).json({ error: 'Invalid credentials' });
   const email = String(data.user?.email || '').trim().toLowerCase(); const admin = ownerLogin && email === ADMIN_EMAIL;
   if (ownerLogin && !admin) return res.status(403).json({ error: 'Owner account is not authorized' });
+  if (!ownerLogin && req.staffRecord && SUPABASE_SERVICE_ROLE_KEY) {
+    await fetch(`${SUPABASE_URL}/rest/v1/staff_accounts?id=eq.${encodeURIComponent(String(req.staffRecord.id))}`, { method: 'PATCH', headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' }, body: JSON.stringify({ last_user_agent: String(req.headers['user-agent'] || '').slice(0, 1000), last_login_at: new Date().toISOString(), is_online: true, last_seen_at: new Date().toISOString() }) });
+  }
   setSessionCookies(res, req, data.access_token, data.refresh_token, Math.min(data.expires_in || 3600, 3600)); return res.status(200).json({ ok: true, admin, permissions: req.staffPermissions || { '*': true } });
 }
 async function logout(req, res) { if (req.method !== 'POST') return res.status(405).end(); const access = token(req); if (access && await isAdmin(req)) await fetch(`${SUPABASE_URL}/auth/v1/logout`, { method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${access}` } }); setSessionCookies(res, req, '', 0); return res.status(204).end(); }
@@ -53,6 +57,7 @@ module.exports = async (req, res) => {
     if (!(await isOwner(req))) return res.status(401).json({ error: 'Owner session required' });
     if (req.method === 'GET') return res.status(200).json((await listStaff()).map(cleanStaff));
     const payload = parseBody(req); const staffId = String(id || payload.id || '');
+    if (req.method === 'POST' && req.query.operation === 'force-logout') return res.status(200).json(await forceLogoutStaff(staffId));
     if (req.method === 'POST') return res.status(201).json(await createStaff(payload));
     if (!staffId) return res.status(400).json({ error: 'Missing staff id' });
     if (req.method === 'DELETE') return res.status(200).json(await deleteStaff(staffId));
