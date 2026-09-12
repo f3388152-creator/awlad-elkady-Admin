@@ -47,7 +47,7 @@ window.sb_update = async (table, id, data) => {
     if (table === 'products_visibility') { await Supabase.update('products', id, {is_active: data.is_active}); return; }
     if (table === 'categories') data = {name: data.name, description: data.desc || ''};
     if (table === 'complaints') data = { ...(data.status !== undefined ? { status: data.status } : {}), ...(data.message !== undefined ? { message: data.message } : {}), ...(data.notes !== undefined ? { notes: data.notes } : {}), ...(data.is_archived !== undefined ? { is_archived: data.is_archived } : {}), ...(data.archived_at !== undefined ? { archived_at: data.archived_at } : {}), ...(data.archive_reason !== undefined ? { archive_reason: data.archive_reason } : {}) };
-    if (table === 'faqs') data = {is_visible: data.visible};
+    if (table === 'faqs') data = { ...(data.q !== undefined ? { q: data.q } : {}), ...(data.a !== undefined ? { a: data.a } : {}), ...(data.visible !== undefined ? { is_visible: data.visible } : {}) };
     if (table === 'socials') data = {is_visible: data.visible};
     if (table === 'site_settings') { /* pass through */ }
     await Supabase.update(table, id, data);
