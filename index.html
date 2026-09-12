@@ -98,7 +98,7 @@
             <!-- Header Bar -->
             <header class="top-bar glass-panel">
                 <div class="flex-align gap-3">
-                    <button type="button" id="mobile-menu-btn" class="icon-btn mobile-only" aria-label="فتح القائمة">
+                    <button type="button" id="mobile-menu-btn" class="icon-btn sidebar-toggle" aria-label="فتح القائمة" aria-expanded="false" title="فتح أو إغلاق القائمة">
                         <i class="fa-solid fa-bars-staggered"></i>
                     </button>
                     <h1 id="page-title" class="page-title">إدارة الطلبات</h1>
@@ -218,8 +218,8 @@
                 <section id="view-settings" class="view-pane">
                     <div class="settings-container glass-panel legacy-settings">
                         <div class="settings-main-tabs" role="tablist" aria-label="إعدادات الموقع">
-                            <button type="button" class="settings-main-tab active" data-settings-view="landing" data-permission="view_landing_settings">إعدادات صفحة الهبوط</button>
-                            <button type="button" class="settings-main-tab" data-settings-view="admin" data-permission="view_admin_settings">إعدادات لوحة الإدارة</button>
+                            <button type="button" class="settings-main-tab active" data-settings-view="landing" data-permission="view_landing_settings" aria-selected="true">إعدادات صفحة الهبوط</button>
+                            <button type="button" class="settings-main-tab" data-settings-view="admin" data-permission="view_admin_settings" aria-selected="false">إعدادات لوحة الإدارة</button>
                         </div>
                         <!-- Settings Sidebar Sub-navigation -->
                         <div class="settings-sidebar">
@@ -322,14 +322,23 @@
 
                             <!-- TAB 3: CONTACT & SOCIAL LINKS -->
                             <div id="tab-contact" class="tab-content-item" data-permission="edit_contact_social">
-                                <div class="legacy-contact-fields form-grid cols-2 mb-4">
-                                    <div class="form-group"><label for="setting-address">عنوان المعرض</label><input type="text" class="form-control" id="setting-address" placeholder="شارع الإصلاح الزراعي - كوم أمبو - أسوان"></div>
-                                    <div class="form-group"><label for="setting-footer-phone">رقم الهاتف</label><input type="tel" class="form-control" id="setting-footer-phone" placeholder="01118060702"></div>
-                                    <div class="form-group"><label for="setting-whatsapp">رقم الواتساب</label><input type="tel" class="form-control" id="setting-whatsapp" placeholder="01118060702"></div>
-                                </div>
+                                <section class="settings-section contact-settings-section" aria-labelledby="contact-settings-title">
+                                    <div class="settings-section-heading">
+                                        <h3 id="contact-settings-title" class="tab-heading mb-1"><i class="fa-solid fa-address-book text-primary"></i> بيانات الاتصال</h3>
+                                        <p class="text-subtle text-sm">البيانات دي بتظهر في الفوتر ووسائل التواصل المباشرة بالموقع.</p>
+                                    </div>
+                                    <div class="legacy-contact-fields form-grid cols-2 mb-4">
+                                        <div class="form-group"><label for="setting-address">عنوان المعرض</label><input type="text" class="form-control" id="setting-address" placeholder="شارع الإصلاح الزراعي - كوم أمبو - أسوان"></div>
+                                        <div class="form-group"><label for="setting-footer-phone">رقم الهاتف</label><input type="tel" class="form-control" id="setting-footer-phone" placeholder="01118060702"></div>
+                                        <div class="form-group"><label for="setting-whatsapp">رقم الواتساب</label><input type="tel" class="form-control" id="setting-whatsapp" placeholder="01118060702"></div>
+                                    </div>
+                                </section>
+                                <section class="settings-section social-settings-section" aria-labelledby="social-settings-title">
                                 <div class="flex-between mb-3">
-                                    <h3 class="tab-heading mb-0"><i class="fa-solid fa-share-nodes text-primary"></i>
-                                        قنوات التواصل الاجتماعي</h3>
+                                    <div>
+                                        <h3 id="social-settings-title" class="tab-heading mb-1"><i class="fa-solid fa-share-nodes text-primary"></i> السوشيال ميديا</h3>
+                                        <p class="text-subtle text-sm">أضف روابط المنصات الاجتماعية فقط، من غير بيانات الهاتف أو العنوان.</p>
+                                    </div>
                                     <button class="btn btn-emerald text-sm" id="add-social-link-btn"><i
                                             class="fa-solid fa-plus"></i> إضافة قناة جديدة</button>
                                 </div>
@@ -338,6 +347,7 @@
                                 </div>
                                 <button class="btn btn-primary" id="save-contact-btn"><i
                                         class="fa-solid fa-floppy-disk"></i> حفظ قنوات التواصل</button>
+                                </section>
                             </div>
 
                             <!-- TAB 4: FAQ MANAGEMENT -->

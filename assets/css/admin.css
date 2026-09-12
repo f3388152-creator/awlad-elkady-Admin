@@ -28,3 +28,72 @@
 .modal-footer{flex-wrap:wrap;gap:.65rem}
 @media (max-width:768px){.main-workspace{padding:.75rem}.settings-container{display:block}.settings-main-tabs,.settings-sidebar{padding-inline:.65rem}.settings-main-tab{flex:1 1 100%;text-align:center}.settings-sidebar{display:flex;flex-direction:row;flex-wrap:nowrap;overflow-x:auto;border-left:0;border-bottom:1px solid var(--clr-border)}.settings-content{padding:.75rem}.settings-tab-btn{flex:0 0 auto}.control-bar{align-items:stretch}.control-bar>*{max-width:100%}.control-bar .btn{min-height:40px}.staff-inline-form{padding:1rem}.staff-inline-form .flex-align{flex-wrap:wrap}.staff-inline-form .flex-align .btn{flex:1 1 140px}.modal-footer>.flex-align{flex-wrap:wrap;width:100%}.modal-footer>.flex-align .btn{flex:1 1 130px}}
 @media (max-width:420px){.settings-main-tab{font-size:.82rem}.settings-tab-btn{font-size:.78rem}.btn{max-width:100%}}
+
+/* Shared form sizing and workspace controls */
+.form-control,
+input,
+select,
+textarea {
+	width: 100%;
+	max-width: 100%;
+	box-sizing: border-box;
+}
+
+.settings-section {
+	min-width: 0;
+	padding: 1rem;
+	border: 1px solid var(--clr-border);
+	border-radius: var(--radius-md);
+	background: var(--clr-card);
+}
+
+.settings-section + .settings-section { margin-top: 1rem; }
+.settings-section-heading { margin-bottom: 1rem; }
+.admin-settings-mode .settings-content { padding: 0; }
+.admin-settings-mode #tab-staff { padding: 1.25rem; }
+
+.sidebar-toggle {
+	display: inline-flex;
+}
+
+@media (min-width:769px) {
+	.dashboard { grid-template-columns: 250px minmax(0, 1fr); }
+	.sidebar {
+		width: 250px;
+		flex: 0 0 250px;
+		transition: width .22s ease, transform .22s ease;
+	}
+	.main-workspace { min-width: 0; }
+	.sidebar-collapsed .dashboard { grid-template-columns: 76px minmax(0, 1fr); }
+	.sidebar-collapsed .sidebar { width: 76px; flex-basis: 76px; }
+	.sidebar-collapsed .sidebar .sidebar-brand { padding-inline: .5rem; }
+	.sidebar-collapsed .sidebar .nav-item,
+	.sidebar-collapsed .sidebar .sidebar-bottom .btn {
+		justify-content: center;
+		padding-inline: .5rem;
+	}
+	.sidebar-collapsed .sidebar .nav-item span,
+	.sidebar-collapsed .sidebar .sidebar-bottom .btn span {
+		display: none;
+	}
+	.sidebar-collapsed .sidebar .nav-item i { margin: 0; }
+}
+
+@media (max-width:768px) {
+	.sidebar-toggle { display: inline-flex; }
+	.sidebar {
+		left: auto;
+		right: -320px;
+		width: min(86vw, 300px);
+		transform: none;
+		box-shadow: 12px 0 28px rgba(15,23,16,.18);
+	}
+	.sidebar.open { right: 0; transform: none; }
+	.sidebar.open + .main-workspace::before {
+		content: '';
+		position: fixed;
+		z-index: 9;
+		inset: 0;
+		background: rgba(15,23,16,.28);
+	}
+}

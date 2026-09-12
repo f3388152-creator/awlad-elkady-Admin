@@ -199,7 +199,12 @@ function initNavigation() {
     });
 
     if (mobileMenuBtn && sidebar) {
-        mobileMenuBtn.addEventListener('click', () => sidebar.classList.toggle('open'));
+        mobileMenuBtn.addEventListener('click', () => {
+            const isMobile = window.matchMedia('(max-width: 768px)').matches;
+            if (isMobile) sidebar.classList.toggle('open');
+            else document.body.classList.toggle('sidebar-collapsed');
+            mobileMenuBtn.setAttribute('aria-expanded', String(isMobile ? sidebar.classList.contains('open') : !document.body.classList.contains('sidebar-collapsed')));
+        });
     }
 
     // Products / Categories Subtabs
@@ -240,12 +245,38 @@ function initNavigation() {
     // Settings Sidebar Subtabs
     const settingsTabBtns = document.querySelectorAll('.settings-tab-btn');
     const tabContentItems = document.querySelectorAll('.tab-content-item');
-    document.querySelectorAll('.settings-main-tab').forEach(btn => {
+    const settingsContainer = document.querySelector('.settings-container');
+    const settingsMainTabs = document.querySelectorAll('.settings-main-tab');
+    const landingSettingsSidebar = document.querySelector('.settings-sidebar');
+    const settingsContent = document.querySelector('.settings-content');
+    const setSettingsMode = mode => {
+        const adminMode = mode === 'admin';
+        settingsContainer?.classList.toggle('admin-settings-mode', adminMode);
+        landingSettingsSidebar?.classList.toggle('hidden', adminMode);
+        settingsContent?.querySelectorAll('.tab-content-item').forEach(item => {
+            item.classList.toggle('active', adminMode ? item.id === 'tab-staff' : item.id === 'tab-identity');
+            item.classList.toggle('hidden', adminMode ? item.id !== 'tab-staff' : item.id === 'tab-staff');
+        });
+        if (adminMode) {
+            document.querySelector('.settings-tab-btn[data-tab="tab-staff"]')?.classList.add('active');
+            initStaffAccounts();
+        } else {
+            document.querySelectorAll('.settings-tab-btn').forEach(item => item.classList.remove('active'));
+            document.querySelector('.settings-tab-btn[data-tab="tab-identity"]')?.classList.add('active');
+        }
+    };
+    settingsMainTabs.forEach(btn => {
         btn.addEventListener('click', () => {
-            document.querySelectorAll('.settings-main-tab').forEach(item => item.classList.remove('active'));
+            settingsMainTabs.forEach(item => {
+                item.classList.remove('active');
+                item.setAttribute('aria-selected', 'false');
+            });
             btn.classList.add('active');
+            btn.setAttribute('aria-selected', 'true');
+            setSettingsMode(btn.dataset.settingsView || 'landing');
         });
     });
+    setSettingsMode('landing');
 
     settingsTabBtns.forEach(btn => {
         btn.addEventListener('click', () => {
